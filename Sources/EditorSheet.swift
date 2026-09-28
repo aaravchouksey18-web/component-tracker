@@ -56,10 +56,10 @@ struct ComponentEditor: View {
         // Start with the cursor in the part number — the field that actually
         // identifies a part. The rest of the form is optional.
         .onAppear { partFieldFocused = true }
-        // Warn before the same part gets entered twice, which silently splits
-        // its stock across two rows.
+        // Warn before the same part gets entered twice — or a renamed part
+        // collides with one already in the inventory — which would silently
+        // split its stock across two rows.
         .onChange(of: ui.draft.partNumber) { _, new in
-            guard isNew else { ui.duplicateOf = nil; return }
             let key = new.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             guard !key.isEmpty else { ui.duplicateOf = nil; return }
             ui.duplicateOf = store.components.first {

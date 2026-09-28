@@ -167,7 +167,7 @@ struct SettingsSheet: View {
                     .textSelection(.enabled)
                     .lineLimit(3)
                     .truncationMode(.middle)
-                Text("Every change is written to this file automatically. Keep a copy in iCloud Drive or Git if you want off-Mac backups.")
+                Text("Every change is written to this file automatically. Use “Save Snapshot…” or the Pi backup for off-Mac copies — this file is personal data and is never part of the app's repository.")
                     .font(.ui(10))
                     .foregroundStyle(Palette.textLow)
                     .fixedSize(horizontal: false, vertical: true)
@@ -289,18 +289,19 @@ struct ExportSheet: View {
     }
 
     private var exportGroup: some View {
-        FieldGroup("Export \(store.components.count) components") {
-            exportRow("CSV for Excel / Numbers",
-                      detail: "All 21 columns, ready to open in a spreadsheet",
+        let shown = store.filtered.count
+        return FieldGroup("Export") {
+            exportRow("CSV — all \(shown) shown component\(shown == 1 ? "" : "s")",
+                      detail: "What the list shows right now — clear search/filters first for the whole inventory",
                       icon: "tablecells") {
                 save(contents: ExportService.csv(from: store.filtered),
                      name: "component-inventory.csv",
                      type: .commaSeparatedText)
             }
-            exportRow("JSON backup",
-                      detail: "Lossless — re-import this to restore everything",
+            exportRow("JSON backup — all \(store.components.count) component\(store.components.count == 1 ? "" : "s")",
+                      detail: "Lossless full document — parts hidden by a search or filter are included",
                       icon: "curlybraces") {
-                save(contents: ExportService.json(from: store.filtered,
+                save(contents: ExportService.json(from: store.components,
                                                  consumed: store.consumed),
                      name: "component-inventory.json",
                      type: .json)

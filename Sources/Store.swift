@@ -448,8 +448,13 @@ final class InventoryStore: ObservableObject {
            let top = undoStack.last,
            top.key == key,
            Date().timeIntervalSince(top.at) < coalesceWindow {
-            // Keep the original wording: "Take 1 × X" reads better than
-            // "Take 3 × X" for a run of three single clicks that undo together.
+            // Same gesture still in progress: the snapshot on top already
+            // predates every edit in the run, so push nothing. Refresh the
+            // timestamp so a continuously held button stays one undo step for
+            // as long as it is held — only a deliberate pause begins the next
+            // step. Keep the original wording: "Take 1 × X" reads better than
+            // "Take 3 × X" for a run of single clicks that undo together.
+            undoStack[undoStack.count - 1].at = Date()
             return
         }
         undoStack.append(UndoStep(components: components, consumed: consumed,

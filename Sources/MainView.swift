@@ -230,6 +230,9 @@ struct MainView: View {
                             ui.takeOutTarget = first
                         }
                     }
+                    .disabled(ui.selection.count != 1)
+                    .help(ui.selection.count == 1 ? "Take out from the selected part"
+                          : "Select exactly one row to take out")
                     GhostButton(title: "Delete", systemImage: "trash") { ui.showDeleteConfirm = true }
                     GhostButton(title: "Clear") { ui.selection.removeAll() }
                 }
