@@ -34,6 +34,12 @@ struct PiSyncE2E {
     static func testUser() -> String {
         ProcessInfo.processInfo.environment["PI_TEST_USER"] ?? "pi"
     }
+    /// The test writes into this remote directory — deliberately *not* the real
+    /// backup folder, so running it can never touch or mislabel a genuine
+    /// snapshot. Override with PI_TEST_REMOTE_DIR if you want it elsewhere.
+    static func testRemoteDir() -> String {
+        ProcessInfo.processInfo.environment["PI_TEST_REMOTE_DIR"] ?? "~/component-tracker-e2e"
+    }
 
     @MainActor
     static func main() async {
@@ -54,7 +60,7 @@ struct PiSyncE2E {
 
         let pi = PiSyncController()
         pi.config = PiConfig(host: testHost(), port: testPort(),
-                             user: testUser(), remoteDir: "~/component-tracker",
+                             user: testUser(), remoteDir: testRemoteDir(),
                              enabled: true, keepSnapshots: 50)
 
         print("\n== test connection ==")

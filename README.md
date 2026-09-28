@@ -146,8 +146,9 @@ Builds the actual `PiSyncController`, pushes, and asserts the bytes on the Pi ar
 byte-identical, no temp files remain, the symlink is correct, and back-to-back pushes
 don't collide. Needs the Pi reachable — it's an integration test. Point it at your Pi with
 the environment: `PI_TEST_HOST` / `PI_TEST_PORT` / `PI_TEST_USER` (defaults `pi.local`,
-`22`, user `pi`). `./test.sh` covers the pure logic (including the shell quoting) with no
-network and no environment.
+`22`, user `pi`). It writes into a remote sandbox — `~/component-tracker-e2e`, or
+`PI_TEST_REMOTE_DIR` — never your real backup folder. `./test.sh` covers the pure logic
+(including the shell quoting) with no network and no environment.
 
 ---
 

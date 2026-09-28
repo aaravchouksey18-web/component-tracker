@@ -263,10 +263,12 @@ final class InventoryStore: ObservableObject {
     }
 
     func update(_ c: Component) {
-        guard components.contains(where: { $0.id == c.id }) else { return }
-        let sanitized = sanitizeComponent(c)
-        recordUndo("Edit \(shortName(sanitized))")
         guard let idx = components.firstIndex(where: { $0.id == c.id }) else { return }
+        let sanitized = sanitizeComponent(c)
+        // A no-op save (open the editor, hit Save, change nothing) must not burn
+        // an undo step — the first ⌘Z after it would appear to do nothing.
+        guard sanitized != components[idx] else { return }
+        recordUndo("Edit \(shortName(sanitized))")
         var updated = sanitized
         updated.updatedAt = Date()
         components[idx] = updated
@@ -381,14 +383,16 @@ final class InventoryStore: ObservableObject {
     /// desynchronising it from the stock count.
     ///
     /// These *do* coalesce: holding down the button should be one undo step, not
-    /// twenty. Keyed per part, so adjusting two different parts stays separate.
+    /// twenty. Keyed per part *and direction*: a − that overshoots plus the +
+    /// that corrects it are two gestures and must undo separately, otherwise a
+    /// quick correction collapses into one step labelled with the first action.
     func adjustQuantity(_ c: Component, by delta: Int) {
         guard components.contains(where: { $0.id == c.id }) else { return }
         let validDelta = max(-SecurityLimits.maxQuantity, min(delta, SecurityLimits.maxQuantity))
         if validDelta < 0 {
-            applyTakeOut(c, count: -validDelta, project: "", undoKey: "adjust:\(c.id)")
+            applyTakeOut(c, count: -validDelta, project: "", undoKey: "adjust:\(c.id):down")
         } else if validDelta > 0 {
-            applyPutBack(c, count: validDelta, project: "", undoKey: "adjust:\(c.id)")
+            applyPutBack(c, count: validDelta, project: "", undoKey: "adjust:\(c.id):up")
         }
     }
 

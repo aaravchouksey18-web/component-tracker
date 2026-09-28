@@ -25,6 +25,8 @@ xcrun swiftc \
   -o "$OUT"
 
 echo "==> Running against the Pi…"
-echo "    (endpoint from PI_TEST_HOST/PI_TEST_PORT/PI_TEST_USER, defaults pi.local:22 as user pi)"
-PI_TEST_HOST="${PI_TEST_HOST:-}" PI_TEST_PORT="${PI_TEST_PORT:-}" PI_TEST_USER="${PI_TEST_USER:-}" \
+echo "    (endpoint from PI_TEST_HOST/PI_TEST_PORT/PI_TEST_USER/PI_TEST_REMOTE_DIR,"
+echo "     defaults pi.local:22 as user pi into ~/component-tracker-e2e — a sandbox,"
+echo "     never your real backup folder)"
+PI_TEST_HOST="${PI_TEST_HOST:-}" PI_TEST_PORT="${PI_TEST_PORT:-}" PI_TEST_USER="${PI_TEST_USER:-}" PI_TEST_REMOTE_DIR="${PI_TEST_REMOTE_DIR:-}" \
   "$OUT"

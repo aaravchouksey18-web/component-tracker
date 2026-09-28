@@ -41,6 +41,10 @@ struct Tests {
         r.supplier = "Mouser"
         r.unitCost = 0.012
         r.project = "Line Follower"
+        // Dates exercise the ISO 8601 persistence path end to end — the JSON
+        // reload below asserts they survive a save/load cycle.
+        r.dateOrdered = Date(timeIntervalSince1970: 1_700_000_000)
+        r.dateReceived = Date(timeIntervalSince1970: 1_700_008_000)
         store.add(r)
 
         var c = Component()
@@ -194,8 +198,9 @@ struct Tests {
         let reopened = InventoryStore(storeURL: url)
         check("survives reload", reopened.components.count == store.components.count)
         check("qty persisted", reopened.components.first { $0.partNumber == "RC0805FR-0710KL" }?.quantity == 10)
-        check("dates persisted", reopened.components.contains { $0.dateOrdered != nil || $0.dateReceived != nil }
-              || true)
+        let reloadedR = reopened.components.first { $0.partNumber == "RC0805FR-0710KL" }
+        check("date ordered persisted", reloadedR?.dateOrdered != nil)
+        check("date received persisted", reloadedR?.dateReceived != nil)
 
         print("\n== currency (INR) ==")
         check("code is INR", Money.code == "INR")

@@ -148,10 +148,7 @@ struct MainView: View {
             ExportSheet()
                 .environmentObject(store)
         }
-        .confirmationDialog(
-            ui.selection.isEmpty
-                ? "Delete “\(store.filtered.first { ui.selection.contains($0.id) }?.name ?? "")”?"
-                : "Delete \(ui.selection.count) selected component\(ui.selection.count == 1 ? "" : "s")?",
+        .confirmationDialog(deleteConfirmTitle,
             isPresented: $ui.showDeleteConfirm, titleVisibility: .visible
         ) {
             Button("Delete", role: .destructive) {
@@ -162,6 +159,18 @@ struct MainView: View {
         } message: {
             Text("This removes the record permanently. Export a backup first if unsure.")
         }
+    }
+
+    /// The old empty-selection fallback queried `filtered.first` against an
+    /// empty set, so the dialog could read `Delete ""?`. Every selection state
+    /// now gets a sensible title — for one row it names the part, for several it
+    /// counts them, and for none (a defensive fallback) it stays grammatical.
+    private var deleteConfirmTitle: String {
+        if let c = store.components.first(where: { ui.selection.contains($0.id) }),
+           ui.selection.count == 1 {
+            return "Delete “\(c.name.isEmpty ? c.partNumber : c.name)”?"
+        }
+        return "Delete \(ui.selection.count) selected component\(ui.selection.count == 1 ? "" : "s")?"
     }
 
     @ViewBuilder
