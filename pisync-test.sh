@@ -28,5 +28,12 @@ echo "==> Running against the Pi…"
 echo "    (endpoint from PI_TEST_HOST/PI_TEST_PORT/PI_TEST_USER/PI_TEST_REMOTE_DIR,"
 echo "     defaults pi.local:22 as user pi into ~/component-tracker-e2e — a sandbox,"
 echo "     never your real backup folder)"
-PI_TEST_HOST="${PI_TEST_HOST:-}" PI_TEST_PORT="${PI_TEST_PORT:-}" PI_TEST_USER="${PI_TEST_USER:-}" PI_TEST_REMOTE_DIR="${PI_TEST_REMOTE_DIR:-}" \
-  "$OUT"
+# Only pass variables that are actually set: `${VAR:-}` would export an *empty
+# string* to the harness, and Swift's `?? default` falls back on unset, not on
+# "" — a bare `./pisync-test.sh` would then try to ssh to host "".
+ENV_ARGS=()
+[[ -n "${PI_TEST_HOST:-}" ]] && ENV_ARGS+=(PI_TEST_HOST="$PI_TEST_HOST")
+[[ -n "${PI_TEST_PORT:-}" ]] && ENV_ARGS+=(PI_TEST_PORT="$PI_TEST_PORT")
+[[ -n "${PI_TEST_USER:-}" ]] && ENV_ARGS+=(PI_TEST_USER="$PI_TEST_USER")
+[[ -n "${PI_TEST_REMOTE_DIR:-}" ]] && ENV_ARGS+=(PI_TEST_REMOTE_DIR="$PI_TEST_REMOTE_DIR")
+env "${ENV_ARGS[@]}" "$OUT"

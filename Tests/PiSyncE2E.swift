@@ -22,23 +22,31 @@ struct PiSyncE2E {
         }
     }
 
+    /// Reads a test env var, treating an empty string the same as unset —
+    /// `?? default` alone is not enough, because a script that exports `VAR=`
+    /// hands us "" rather than nil.
+    static func testEnv(_ key: String) -> String? {
+        let v = ProcessInfo.processInfo.environment[key] ?? ""
+        return v.isEmpty ? nil : v
+    }
+
     /// Endpoint for the integration test, from the environment so the harness
     /// never ships a machine-specific address. Run with e.g.
     ///   PI_TEST_HOST=pi.local PI_TEST_PORT=22 PI_TEST_USER=pi ./pisync-test.sh
     static func testHost() -> String {
-        ProcessInfo.processInfo.environment["PI_TEST_HOST"] ?? "pi.local"
+        testEnv("PI_TEST_HOST") ?? "pi.local"
     }
     static func testPort() -> Int {
-        Int(ProcessInfo.processInfo.environment["PI_TEST_PORT"] ?? "22") ?? 22
+        Int(testEnv("PI_TEST_PORT") ?? "") ?? 22
     }
     static func testUser() -> String {
-        ProcessInfo.processInfo.environment["PI_TEST_USER"] ?? "pi"
+        testEnv("PI_TEST_USER") ?? "pi"
     }
     /// The test writes into this remote directory — deliberately *not* the real
     /// backup folder, so running it can never touch or mislabel a genuine
     /// snapshot. Override with PI_TEST_REMOTE_DIR if you want it elsewhere.
     static func testRemoteDir() -> String {
-        ProcessInfo.processInfo.environment["PI_TEST_REMOTE_DIR"] ?? "~/component-tracker-e2e"
+        testEnv("PI_TEST_REMOTE_DIR") ?? "~/component-tracker-e2e"
     }
 
     @MainActor
@@ -86,13 +94,17 @@ struct PiSyncE2E {
         if let v = verified { print("       verified \(PiSyncController.byteText(v.bytes)) sha \(v.sha)…") }
 
         print("\n== what landed on the Pi ==")
-        let newest = run("ls -1t ~/component-tracker/inventory-[0-9]*.json 2>/dev/null | head -1")
+        // Verify the *same* directory the sync wrote to (the sandbox), never a
+        // hardcoded real path — checking the real backup folder would risk both
+        // reporting on and touching a genuine user backup.
+        let target = testRemoteDir()
+        let newest = run("ls -1t \(target)/inventory-[0-9]*.json 2>/dev/null | head -1")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if newest.isEmpty {
             check("a snapshot exists on the Pi", false)
         } else {
             print("       newest: \(newest)")
-            let count = run("ls -1 ~/component-tracker/inventory-[0-9]*.json 2>/dev/null | wc -l")
+            let count = run("ls -1 \(target)/inventory-[0-9]*.json 2>/dev/null | wc -l")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             print("       total snapshots: \(count)")
 
@@ -120,11 +132,11 @@ struct PiSyncE2E {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             check("remote file carries the project names", remoteProject != "0")
 
-            let temps = run("ls -a ~/component-tracker/ | grep -cE '^\\.upload'")
+            let temps = run("ls -a \(target)/ | grep -cE '^\\.upload'")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             check("no temp files left behind", temps == "0")
 
-            let link = run("readlink -f ~/component-tracker/inventory-latest.json")
+            let link = run("readlink -f \(target)/inventory-latest.json")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             check("inventory-latest.json points at the newest", link == newest)
         }
