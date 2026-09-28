@@ -1,0 +1,13 @@
+# build, transient and OS cruft
+build/
+.DS_Store
+*.swp
+
+# secrets / local config
+*.env
+
+# Personal inventory data — real quantities, suppliers, prices and device
+# identifiers. Never commit these; keep them on the machine that owns them.
+# (Precedent: gitignored “device-derived data” in the pi-indoor-gps repo.)
+Data/inventory.json
+Data/*.csv
