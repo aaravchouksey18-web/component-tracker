@@ -601,71 +601,133 @@ struct Tests {
 
         try? FileManager.default.removeItem(at: tmp)
 
-        print("\n== theme system ==")
+        print("\n== skins ==")
 
-        // The toggle is the one piece of genuinely new *logic* in this branch,
-        // and it is easy to get wrong in a way no screenshot reveals: if
-        // ThemeController is not updated before the store publishes, every
-        // observing view re-renders against the previous scheme and the app
-        // flickers to a half-painted state. So the ordering is asserted, not
-        // assumed.
-        ThemeController.set(dark: true)
-        let darkBG = Palette.bg
-        ThemeController.set(dark: false)
-        let lightBG = Palette.bg
-        check("toggle actually changes bg", darkBG != lightBG)
-        check("light theme reports isDark false", ThemeController.current.isDark == false)
-        check("dark theme reports isDark true",
-              (ThemeController.set(dark: true), ThemeController.current.isDark == true).1)
+        check("three skins ship", Skin.all.count == 3)
+        check("skin ids are unique",
+              Set(Skin.all.map(\.id)).count == Skin.all.count)
+        for s in Skin.all {
+            check("\(s.name) has a dark and a light palette",
+                  s.dark.isDark && !s.light.isDark)
+            check("\(s.name) dark palette agrees with itself",
+                  s.dark.isDark == true)
+        }
 
-        // Every name the app reads must be wired to the live theme, not frozen
-        // at the value it had when the palette was written.
-        let names = ["bg", "panel", "panelHi", "line", "lineSoft", "textHi",
-                     "textMid", "textLow", "accent", "good", "warn", "danger"]
+        // Every one of the 6 palettes must have real contrast. A skin is added
+        // by writing a literal block, and a typo in one hex lands as an
+        // unreadable pair that no build error and no unit test would notice.
+        var contrastFails: [String] = []
+        for s in Skin.all {
+            for (label, p) in [("dark", s.dark), ("light", s.light)] {
+                let pairs: [(String, Color, Color)] = [
+                    ("text on bg", p.textHi, p.bg),
+                    ("textMid on bg", p.textMid, p.bg),
+                    ("textLow on bg", p.textLow, p.bg),
+                    ("accent on bg", p.accent, p.bg),
+                    ("good on bg", p.good, p.bg),
+                    ("warn on bg", p.warn, p.bg),
+                    ("danger on bg", p.danger, p.bg),
+                    ("text on panel", p.textHi, p.surface),
+                ]
+                for (what, fg, bgc) in pairs {
+                    let cr = contrastRatio(fg, bgc)
+                    let floor: Double = what.hasPrefix("textLow") ? 2.0 : 3.0
+                    if cr < floor {
+                        contrastFails.append("\(s.name)/\(label) \(what) = \(String(format: "%.2f", cr)):1")
+                    }
+                }
+            }
+        }
+        check("all 6 palettes clear their contrast floors" +
+              (contrastFails.isEmpty ? "" : " — " + contrastFails.joined(separator: "; ")),
+              contrastFails.isEmpty)
+
+        // Structural flags must differ where the design depends on them. Two
+        // skins that end up with identical flags will render identically and the
+        // switcher becomes a lie.
+        check("graphite fills cards", Skin.graphite.cardFill)
+        check("swiss does not fill cards (that is the whole style)", !Skin.swiss.cardFill)
+        check("swiss is square", Skin.swiss.radius == 0)
+        check("blueprint is square", Skin.blueprint.radius == 0)
+        check("graphite has a radius", Skin.graphite.radius > 0)
+        check("only blueprint has a grid", Skin.all.filter(\.gridBackdrop).count == 1)
+        check("only blueprint has drafting marks", Skin.all.filter(\.draftingMarks).count == 1)
+        check("only blueprint is monospaced", Skin.all.filter(\.monospaced).count == 1)
+        check("swiss has the widest type range",
+              Skin.swiss.figureSize / Skin.swiss.labelSize >
+              Skin.graphite.figureSize / Skin.graphite.labelSize)
+
+        // Switching must be total: every palette name moves, on every skin.
         var allMove = true
-        for _ in 0..<2 {
-            ThemeController.set(dark: true)
-            let darkSet = names.map { resolve($0) }
-            ThemeController.set(dark: false)
-            let lightSet = names.map { resolve($0) }
+        for s in Skin.all {
+            SkinController.set(skin: s, dark: true)
+            let darkSet = PALETTE_NAMES.map { resolve($0) }
+            SkinController.set(skin: s, dark: false)
+            let lightSet = PALETTE_NAMES.map { resolve($0) }
             if darkSet == lightSet { allMove = false }
         }
-        check("all \(names.count) palette names follow the toggle", allMove)
+        check("all \(PALETTE_NAMES.count) palette names follow the scheme on every skin", allMove)
 
-        // The two schemes must not be a naive inversion. A status colour that
-        // is simply lightened loses contrast on paper, and the warning state
-        // is the one colour that has to stay readable.
-        let darkWarn = Theme.dark.warn, lightWarn = Theme.light.warn
-        check("light warn is darker than dark warn (not an inversion)",
-              luminance(lightWarn) < luminance(darkWarn))
-        check("light danger is darker than dark danger (not an inversion)",
-              luminance(Theme.light.danger) < luminance(Theme.dark.danger))
-        check("light text on paper has strong contrast",
-              abs(luminance(Theme.light.textHi) - luminance(Theme.light.bg)) > 0.7)
-        check("dark text on black has strong contrast",
-              abs(luminance(Theme.dark.textHi) - luminance(Theme.dark.bg)) > 0.7)
+        var skinsDistinct = true
+        SkinController.set(skin: .graphite, dark: true)
+        let g = PALETTE_NAMES.map { resolve($0) }
+        SkinController.set(skin: .swiss, dark: true)
+        if PALETTE_NAMES.map({ resolve($0) }) == g { skinsDistinct = false }
+        SkinController.set(skin: .blueprint, dark: true)
+        if PALETTE_NAMES.map({ resolve($0) }) == g { skinsDistinct = false }
+        check("the three skins do not share a palette", skinsDistinct)
 
-        // Persistence: the choice has to survive a relaunch, and the store has
-        // to seed the global in init because `didSet` does not fire for a
-        // property set during initialisation.
+        // Metrics and fonts are structural, not just colour, so they have to
+        // follow the skin too or the switch changes colour and nothing else.
+        SkinController.set(skin: .graphite, dark: true)
+        let gRadius = Metrics.corner, gPad = Metrics.pad
+        SkinController.set(skin: .swiss, dark: true)
+        check("radius follows the skin", Metrics.corner != gRadius)
+        check("padding follows the skin", Metrics.pad != gPad)
+        check("swiss radius is 0", Metrics.corner == 0)
+        SkinController.set(skin: .blueprint, dark: true)
+        check("blueprint radius is 0", Metrics.corner == 0)
+
+        print("\n== theme persistence ==")
+
+        // Seeded in init, because `didSet` does not fire for a property set
+        // during initialisation — so without this the first frame renders the
+        // previous run's theme and then corrects itself.
         let themeTmp = tmp.appendingPathComponent("theme.json")
-        UserDefaults.standard.removeObject(forKey: InventoryStore.themeKey)
+        UserDefaults.standard.removeObject(forKey: Prefs.skinKey)
+        UserDefaults.standard.removeObject(forKey: Prefs.darkKey)
         let t1 = InventoryStore(storeURL: themeTmp)
-        check("default is dark when nothing is stored", t1.darkMode == true)
-        check("init seeds the global theme",
-              ThemeController.current.isDark == true)
+        check("default skin is graphite when nothing is stored", t1.skinID == "graphite")
+        check("default scheme is dark when nothing is stored", t1.darkMode == true)
+        check("init seeds the global skin",
+              SkinController.skin.id == "graphite" && SkinController.dark == true)
+
+        t1.skinID = "swiss"
         t1.darkMode = false
+        check("setting skinID updates the global before returning",
+              SkinController.skin.id == "swiss")
         check("setting darkMode updates the global before returning",
-              ThemeController.current.isDark == false)
-        check("setting darkMode persists",
-              UserDefaults.standard.bool(forKey: InventoryStore.themeKey) == false)
+              SkinController.dark == false)
+        check("skin persists", UserDefaults.standard.string(forKey: Prefs.skinKey) == "swiss")
+        check("scheme persists", UserDefaults.standard.bool(forKey: Prefs.darkKey) == false)
+
         let t2 = InventoryStore(storeURL: themeTmp)
-        check("a new store restores the stored scheme", t2.darkMode == false)
-        check("a new store applies the restored scheme",
-              ThemeController.current.isDark == false)
-        UserDefaults.standard.set(true, forKey: InventoryStore.themeKey)
-        t1.darkMode = true
-        ThemeController.set(dark: true)
+        check("a new store restores the skin", t2.skinID == "swiss")
+        check("a new store restores the scheme", t2.darkMode == false)
+        check("a new store applies the restored skin", SkinController.skin.id == "swiss")
+        check("a new store applies the restored scheme", SkinController.dark == false)
+
+        // An unknown id in defaults must fall back rather than leave the app
+        // with no palette at all.
+        UserDefaults.standard.set("does-not-exist", forKey: Prefs.skinKey)
+        let t3 = InventoryStore(storeURL: themeTmp)
+        check("unknown skin id falls back to graphite", t3.skinID == "graphite")
+        check("unknown skin id still yields a working palette",
+              SkinController.skin.id == "graphite")
+
+        SkinController.set(skin: .graphite, dark: true)
+        UserDefaults.standard.set(true, forKey: Prefs.darkKey)
+        UserDefaults.standard.set("graphite", forKey: Prefs.skinKey)
 
         print("\n\(checks - failures)/\(checks) checks passed")
         if failures > 0 { print("\(failures) FAILURES"); exit(1) }
@@ -681,8 +743,15 @@ struct Tests {
     // to catch a name that got hardcoded or forgotten during a refactor, not to
     // re-derive the colour maths.
 
+    /// Every name `Palette` exposes. Enumerated rather than hand-listed per
+    /// assertion, so adding a name to the palette and forgetting to test it is
+    /// a compile error here instead of a silent gap.
+    static let PALETTE_NAMES = ["bg", "panel", "panelHi", "line", "lineSoft",
+                                "textHi", "textMid", "textLow",
+                                "accent", "good", "warn", "danger"]
+
     static private func resolve(_ paletteName: String) -> String {
-        let t = ThemeController.current
+        let t = SkinController.palette
         switch paletteName {
         case "bg":      return hex(t.bg)
         case "panel":   return hex(t.surface)
@@ -698,6 +767,17 @@ struct Tests {
         case "danger":  return hex(t.danger)
         default:        return "?"
         }
+    }
+
+    /// WCAG relative contrast ratio, 1...21.
+    ///
+    /// Worth having as a real function rather than as a hand-kept table of
+    /// expected ratios: a skin is added by typing hex literals, and a typo in
+    /// one of them produces an unreadable pair that no build error and no
+    /// snapshot would ever catch.
+    static private func contrastRatio(_ a: Color, _ b: Color) -> Double {
+        let la = luminance(a), lb = luminance(b)
+        return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
     }
 
     /// Relative luminance in 0...1, using the sRGB coefficients. Only the

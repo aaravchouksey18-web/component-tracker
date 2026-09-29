@@ -233,6 +233,7 @@ struct ComponentCard: View {
     var onDelete: () -> Void
 
     var body: some View {
+        CardChrome {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 8) {
                 VStack(alignment: .leading, spacing: 3) {
@@ -303,8 +304,8 @@ struct ComponentCard: View {
                 GhostButton(title: "Delete") { onDelete() }
             }
         }
-        .padding(10)
-        .overlay(Rectangle().strokeBorder(Palette.line, lineWidth: Metrics.rule))
+        .padding(SkinController.skin.pad - 4)
+        }
         .contextMenu {
             Button("Edit…") { onEdit() }
             Button("Take Out…") { onTakeOut() }

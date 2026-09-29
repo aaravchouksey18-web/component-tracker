@@ -102,12 +102,12 @@ final class InventoryStore: ObservableObject {
     @Published var sortAscending: Bool = true
     @Published var cardView: Bool = false
 
-    /// Phosphor-on-black or ink-on-paper.
+    /// Dark or light reading of the current skin.
     ///
     /// This lives on the store rather than in its own observable object for a
     /// concrete reason: every view in the app already observes the store, so a
-    /// single publish here repaints all of them. A dedicated `ThemeController`
-    /// as an `ObservableObject` would need to be injected into every
+    /// single publish here repaints all of them. A dedicated controller as an
+    /// `ObservableObject` would need to be injected into every
     /// `environmentObject` call site to get the same coverage.
     ///
     /// `Palette` reads a plain global rather than the environment, so the new
@@ -116,12 +116,24 @@ final class InventoryStore: ObservableObject {
     @Published var darkMode: Bool {
         didSet {
             guard darkMode != oldValue else { return }
-            ThemeController.set(dark: darkMode)
-            UserDefaults.standard.set(darkMode, forKey: Self.themeKey)
+            SkinController.set(skin: .named(skinID), dark: darkMode)
+            Prefs.save()
         }
     }
 
-    static let themeKey = "componenttracker.darkMode"
+    /// Which of the three skins. Also mirrored onto `SkinController` in `didSet`
+    /// for the same reason `darkMode` is — `Palette` is a global read, so the
+    /// global has to be current before SwiftUI asks any view to re-render.
+    @Published var skinID: String {
+        didSet {
+            guard skinID != oldValue else { return }
+            SkinController.set(skin: .named(skinID), dark: darkMode)
+            Prefs.save()
+        }
+    }
+
+    /// Resolved, for views that want the structural flags rather than the id.
+    var skin: Skin { Skin.named(skinID) }
 
     @Published private(set) var lastSaved: Date? = nil
     @Published private(set) var statusMessage: String? = nil
@@ -160,12 +172,11 @@ final class InventoryStore: ObservableObject {
     init(storeURL: URL? = nil) {
         // Seed from UserDefaults *before* the first view reads `Palette`.
         // `didSet` does not fire for a property set during initialisation, so
-        // the theme has to be pushed into the global by hand or the first frame
-        // renders the wrong scheme and then corrects itself a frame later.
-        let stored = UserDefaults.standard.object(forKey: Self.themeKey) as? Bool
-        let dark = stored ?? true
-        self.darkMode = dark
-        ThemeController.set(dark: dark)
+        // the skin and scheme have to be pushed into the global by hand or the
+        // first frame renders the previous run's theme and then corrects itself.
+        Prefs.load()
+        self.skinID = SkinController.skin.id
+        self.darkMode = SkinController.dark
 
         self.storeURL = storeURL ?? InventoryStore.inventoryFile
         load()

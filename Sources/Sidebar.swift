@@ -56,10 +56,17 @@ struct Sidebar: View {
 
             Spacer(minLength: 0)
             Rule()
+            ThemeSwitcher()
+            Rule()
             PiStatusBar()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Palette.bg)
+        .background {
+            ZStack(alignment: .topLeading) {
+                Palette.bg
+                if SkinController.skin.gridBackdrop { GridBackdrop() }
+            }
+        }
     }
 
     /// A shell prompt, then the live count. The `$` is the whole personality of
@@ -71,7 +78,7 @@ struct Sidebar: View {
                 .tracking(0.8)
                 .foregroundStyle(Palette.textHi)
             HStack(spacing: 5) {
-                Text("$")
+                Text(SkinController.skin.id == "swiss" ? "—" : "$")
                     .font(.mono(10, .bold))
                     .foregroundStyle(Palette.accent)
                 Text("\(store.totalUnits) units on hand")
@@ -176,6 +183,36 @@ struct CategoryRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// Live skin and scheme switching, in the place you would look for it.
+///
+/// Pinned to the bottom of the sidebar rather than buried in Settings, because
+/// a skin is the first thing you want to change when a skin is wrong — and
+/// burying it means the next attempt at picking one starts from the app you
+/// already dislike.
+///
+/// Each row carries a **live swatch** rather than a name only: the swatch is
+/// drawn with that skin's own palette, so you see what you are choosing before
+/// you click it, and the difference between three designs that share a name
+/// ("dark", "dark") is visible rather than described.
+struct ThemeSwitcher: View {
+    @EnvironmentObject private var store: InventoryStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SectionLabel("Themes")
+                .padding(.horizontal, Metrics.pad)
+                .padding(.top, 10)
+                .padding(.bottom, 5)
+
+            SkinPicker()
+            SchemePair()
+                .padding(.horizontal, Metrics.pad)
+                .padding(.top, 8)
+        }
+        .padding(.bottom, 8)
     }
 }
 

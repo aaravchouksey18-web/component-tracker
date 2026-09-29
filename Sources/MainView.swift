@@ -120,7 +120,12 @@ struct MainView: View {
                 .navigationSplitViewColumnWidth(min: 196, ideal: 210, max: 260)
         } detail: {
             detail
-                .background(Palette.bg)
+        .background {
+            ZStack(alignment: .topLeading) {
+                Palette.bg
+                if SkinController.skin.gridBackdrop { GridBackdrop() }
+            }
+        }
         }
         .navigationSplitViewStyle(.balanced)
         .toolbarBackground(Palette.bg, for: .windowToolbar)
@@ -224,11 +229,11 @@ struct MainView: View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(titleText.uppercased())
-                    .font(.ui(13, .bold))
-                    .tracking(1.0)
+                    .font(.ui(SkinController.skin.bodySize + 2, .bold))
+                    .tracking(SkinController.skin.labelTracking)
                     .foregroundStyle(Palette.textHi)
                 Text("\(store.filtered.count) of \(store.components.count) component\(store.components.count == 1 ? "" : "s")")
-                    .font(.ui(10))
+                    .font(.ui(SkinController.skin.labelSize + 1))
                     .foregroundStyle(Palette.textLow)
             }
 

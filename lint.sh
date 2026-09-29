@@ -9,7 +9,7 @@
 # on data, and the render harness rasterises ScrollView content as empty, so the
 # three views that contained the bug were blank images by construction.
 #
-# These four rules are the ones whose violations produce that class of failure.
+# These rules target the class of failure a passing test run cannot see.
 # It is a lint, not a type checker: it reads text, so it can miss things and it
 # can be over-broad. Where it is over-broad the escape hatch is an explicit
 # `// lint:allow <rule>` on the offending line, so a suppression is always a
@@ -154,33 +154,14 @@ def check_fonts(f, lines):
             chunk = "\n".join(lines[i-1:i+3])
             call = chunk.split(")")[0]
             if "design:" not in call:
-                err(f, i, "font", "Font.system without `design: .monospaced` — columns of "
-                                 "figures do not line up in a proportional face")
+                err(f, i, "font", "Font.system without an explicit `design:` — the default "
+                                 "flips with the system setting rather than the skin")
         if SEMANTIC_FONT.search(code):
             err(f, i, "font", f"`{SEMANTIC_FONT.search(code).group(0)}` — semantic sizes do "
                              "not scale here; use .ui()/.mono()/.field()")
         if "Font.custom(" in code or re.search(r'Font\s*\(\s*(?:name|size)\s*:', code):
             err(f, i, "font", "named font — an unresolvable .custom() falls back silently "
                              "with no error; use .system(design: .monospaced)")
-
-def check_shapes(f, lines):
-    """No curves, no depth, no fill. This aesthetic has none of the three."""
-    banned = [
-        (r'\bRoundedRectangle\b', "rounded rectangle"),
-        (r'\bCapsule\s*\(', "capsule"),
-        (r'\bCircle\s*\(', "circle"),
-        (r'\bEllipse\s*\(', "ellipse"),
-        (r'\.cornerRadius\s*\(', "corner radius"),
-        (r'\.shadow\s*\(', "shadow"),
-        (r'\b(?:Linear|Radial|Angular)Gradient\b', "gradient"),
-    ]
-    for i, ln in enumerate(lines, 1):
-        if "lint:allow shape" in ln:
-            continue
-        code = ln.split("//", 1)[0]
-        for pat, what in banned:
-            if re.search(pat, code):
-                err(f, i, "shape", f"{what} — this design has no curves, depth or fill")
 
 # ------------------------------------------------- the layout contract
 
@@ -253,13 +234,30 @@ def check_contract(name, body, file, base_line, user_by):
                     f"with only one axis pinned. In a {kind} it expands to fill the axis you "
                     "did not set. Pin both, or mark the line `// lint:allow greedy`.")
 
+def check_radius(f, lines):
+    """Corner radius must come from the skin.
+
+    Hardcoding one reintroduces exactly the bug `Skin.radius` was added to
+    remove: a view that looks right in the skin you built it in and wrong in the
+    other two, and only in that one view, which is the hardest kind to notice.
+    """
+    for i, ln in enumerate(lines, 1):
+        if "lint:allow radius" in ln or f.name == PALETTE_FILE:
+            continue
+        code = ln.split("//", 1)[0]
+        if re.search(r'cornerRadius\s*:\s*[0-9]', code):
+            err(f, i, "radius", "literal corner radius — use Metrics.corner so the skin "
+                                "controls it")
+        if re.search(r'cornerRadius\s*:\s*SkinController', code):
+            continue
+
 # ---------------------------------------------------------------- run
 
 for f, src in text.items():
     lines = src.splitlines()
     check_theme(f, lines)
     check_fonts(f, lines)
-    check_shapes(f, lines)
+    check_radius(f, lines)
 
 for name in sorted(shared):
     f, i, end = structs[name]

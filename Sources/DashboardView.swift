@@ -46,7 +46,12 @@ struct DashboardView: View {
             }
             .padding(12)
         }
-        .background(Palette.bg)
+        .background {
+            ZStack(alignment: .topLeading) {
+                Palette.bg
+                if SkinController.skin.gridBackdrop { GridBackdrop() }
+            }
+        }
     }
 
     var header: some View {

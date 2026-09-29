@@ -213,7 +213,81 @@ struct RenderTests {
             .environmentObject(store),
             size: CGSize(width: 880, height: 200), to: outDir, name: "D1-tiles", dark: true)
 
-        ThemeController.set(dark: true)
+        // ------------------------------------------------------------------
+        // Skin sweep. The same three surfaces in all six palette combinations.
+        //
+        // This block exists because two skins have now been built and rejected
+        // on the strength of a description, and a description cannot carry the
+        // thing that actually decides a skin: how 40pt figures and 8pt labels
+        // feel next to each other with a rule between them. So rather than
+        // rebuilding the app to find out, every skin is rendered into the same
+        // file names and the choice is made by looking.
+        //
+        // The unit tests prove the skins differ. Only these images say whether
+        // any of them is any good, and the two of those are not the same claim.
+        // ------------------------------------------------------------------
+        log("")
+        log("== skin sweep ==")
+        for skin in Skin.all {
+            for dark in [true, false] {
+                let tag = "\(skin.id.prefix(1))\(dark ? "d" : "l")"
+
+                render(Sidebar().environmentObject(store)
+                        .environmentObject(PiSyncController()),
+                       size: CGSize(width: 210, height: 700), to: outDir,
+                       name: "S-\(tag)-sidebar", dark: dark, skin: skin)
+
+                render(
+                    VStack(alignment: .leading, spacing: SkinController.skin.gap) {
+                        ForEach(0..<rows.count, id: \.self) { i in
+                            HStack(alignment: .top, spacing: SkinController.skin.gap) {
+                                ForEach(rows[i], id: \.id) { c in
+                                    ComponentCard(component: c, onEdit: {}, onTakeOut: {}, onDelete: {})
+                                        .frame(width: 285)
+                                }
+                            }
+                        }
+                    }
+                    .padding(SkinController.skin.pad)
+                    .frame(width: 900, height: 620, alignment: .top)
+                    .background {
+                        ZStack(alignment: .topLeading) {
+                            Palette.bg
+                            if SkinController.skin.gridBackdrop { GridBackdrop() }
+                        }
+                    }
+                    .environmentObject(store),
+                    size: CGSize(width: 900, height: 620), to: outDir,
+                    name: "S-\(tag)-cards", dark: dark, skin: skin)
+
+                render(
+                    VStack(alignment: .leading, spacing: SkinController.skin.gap) {
+                        HStack(spacing: SkinController.skin.gap) {
+                            StatTile(label: "Components", value: "\(store.components.count)",
+                                     sub: "distinct part numbers")
+                            StatTile(label: "Total units", value: "\(store.totalUnits)",
+                                     sub: "across all bins")
+                            StatTile(label: "Inventory value",
+                                     value: Money.compact(store.totalValue), sub: "qty x unit cost")
+                        }
+                        Rule()
+                        HStack(spacing: 6) {
+                            GhostButton(title: "Take Out", systemImage: "minus", action: {})
+                            GhostButton(title: "Save", prominent: true, action: {})
+                            Pill(text: "Resistors", tint: .blue)
+                            Pill(text: "LOW", tint: Palette.danger, filled: true)
+                        }
+                    }
+                    .padding(SkinController.skin.pad)
+                    .frame(width: 880, height: 190, alignment: .top)
+                    .background(Palette.bg)
+                    .environmentObject(store),
+                    size: CGSize(width: 880, height: 190), to: outDir,
+                    name: "S-\(tag)-tiles", dark: dark, skin: skin)
+            }
+        }
+
+        SkinController.set(skin: .graphite, dark: true)
         log("")
         if failures > 0 {
             log("RENDER FAILURE: \(failures) render(s) failed a check — see <-- above")
@@ -233,8 +307,8 @@ struct RenderTests {
         log("renders written to \(outDir.path)")
     }
 
-    /// `scheme` selects both halves of the theme: the global `ThemeController`
-    /// that `Palette` reads, and the `colorScheme` environment that the
+    /// `skin` and `scheme` select both halves of the theme: the global
+    /// `SkinController` that `Palette` reads, and the `colorScheme` environment that the
     /// AppKit-backed pieces (scrollbars, native field chrome) obey. Setting one
     /// without the other is how you get a render that is internally
     /// inconsistent — SwiftUI drawing in light while the OS chrome draws dark.
@@ -253,9 +327,10 @@ struct RenderTests {
     /// SectionLabel bug were all ScrollView-rooted, their renders came back
     /// empty, and "empty render, no assertion" looked exactly like "verified".
     static func render<V: View>(_ view: @autoclosure () -> V, size: CGSize, to dir: URL,
-                                name: String, dark: Bool = true, scrollBody: Bool = false) {
-        ThemeController.set(dark: dark)
-        log("rendering \(name)… [\(dark ? "dark" : "light")]")
+                                name: String, dark: Bool = true, skin: Skin = .graphite,
+                                scrollBody: Bool = false) {
+        SkinController.set(skin: skin, dark: dark)
+        log("rendering \(name)… [\(skin.name)/\(dark ? "dark" : "light")]")
         // `@autoclosure`, not a plain parameter. A plain parameter is evaluated
         // by the caller, so any `Palette.x` written in an argument list —
         // `tint: store.lowStockCount > 0 ? Palette.warn : Palette.textHi` — is
@@ -291,7 +366,7 @@ struct RenderTests {
         // actually requested, which makes dark and light directly comparable
         // and turns "did the palette get applied at all" into a real check.
         let bmp = NSBitmapImageRep(cgImage: img)
-        let theme = ThemeController.current
+        let theme = SkinController.palette
         let bg = rgb(theme.bg), surf = rgb(theme.surface), text = rgb(theme.textHi),
               accent = rgb(theme.accent)
 
@@ -352,10 +427,15 @@ struct RenderTests {
         let expectedLum = 0.2126 * bg.0 + 0.7152 * bg.1 + 0.0722 * bg.2
         let measuredMode = Double(modeIdx) / 255.0
         let modeOK = abs(measuredMode - expectedLum) < 0.12
-        let sideOK = dark ? measuredMode < 0.35 : measuredMode > 0.55
+        // Read the side off the palette that was requested rather than off the
+        // `dark` argument. Six palettes now exist and they are not a clean
+        // bright/dark split — a light blueprint is a pale drafting sheet, not a
+        // pale photograph of a negative — so a hardcoded 0.35/0.55 would be a
+        // threshold tuned to three colours and asserted against six.
+        let sideOK = theme.isDark ? measuredMode < 0.35 : measuredMode > 0.55
 
         var notes: [String] = []
-        if !sideOK { notes.append("SCHEME MISMATCH (asked \(dark ? "dark" : "light"))") }
+        if !sideOK { notes.append("SCHEME MISMATCH (asked \(skin.name)/\(dark ? "dark" : "light"))") }
         if !modeOK { notes.append("BG OFF-THEME") }
         if pct(bgHit) < 5 { notes.append("low bg coverage") }
         // Ink, not exact colour: antialiased glyph interiors never land on the
@@ -378,9 +458,14 @@ struct RenderTests {
             partial += 1
         }
 
-        log(String(format: "  %-16@ %4dx%-4d  ink %5.2f%%  accent %4d%%  mode %.2f (want %.2f)  lum %.2f-%.2f%@",
-                   name as NSString, img.width, img.height,
-                   pctF(inkHit), pct(accentHit), measuredMode, expectedLum,
+        // Accent is reported fractionally for the same reason ink is: a
+        // prominent button is ~0.7% of a tiles render, so the integer form
+        // prints a confident "0%" next to a colour that is demonstrably there.
+        // A number that rounds to zero is not the same claim as a number that
+        // is zero.
+        log(String(format: "  %-22@ %4dx%-4d  ink %5.2f%%  accent %5.2f%%  mode %.2f (want %.2f)  lum %.2f-%.2f%@",
+                   (name + " " + skin.name) as NSString, img.width, img.height,
+                   pctF(inkHit), pctF(accentHit), measuredMode, expectedLum,
                    minLum, maxLum,
                    (notes.isEmpty ? "" : "   <-- " + notes.joined(separator: ", ")) as NSString))
         // A ScrollView's missing body is a harness limit, not a product defect,

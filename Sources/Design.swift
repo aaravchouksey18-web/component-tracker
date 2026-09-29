@@ -41,62 +41,26 @@ enum Money {
     }
 }
 
-// MARK: - Theme
+// MARK: - Colour set
 
-/// One colour set. Two of them ship: a phosphor-on-black terminal, and the
-/// same instrument read as dark ink on paper for daylight.
+/// One colour set. Six ship: three skins, each with a dark and a light reading.
 ///
-/// Both are built from the same six-part structure, because that structure is
-/// what makes the app look like a ledger rather than a consumer product:
-/// two background steps, one raised step, two rule weights, three text steps,
-/// and four status colours that mean exactly one thing each.
-struct Theme {
+/// Every set has the same shape — two background steps, one raised step, two
+/// rule weights, three text steps, four status colours — because that shape is
+/// what lets a single set of components render in all three skins without any of
+/// them special-casing. What differs between skins is the *values*, plus a small
+/// set of structural flags on `Skin`.
+struct Palette2 {
     var bg, surface, raised: Color
     var rule, ruleSoft: Color
     var textHi, textMid, textLow: Color
     var accent, good, warn, danger: Color
     var isDark: Bool
-
-    static let dark = Theme(
-        bg:      Color(hex: 0x0A0B0C),
-        surface: Color(hex: 0x111315),
-        raised:  Color(hex: 0x191C1F),
-        rule:    Color(hex: 0x24282C),
-        ruleSoft:Color(hex: 0x191C20),
-        textHi:  Color(hex: 0xD7DBDF),
-        textMid: Color(hex: 0x8B9298),
-        textLow: Color(hex: 0x5C6369),
-        accent:  Color(hex: 0xFFB000),   // amber phosphor
-        good:    Color(hex: 0x2FD07A),
-        warn:    Color(hex: 0xFFB000),
-        danger:  Color(hex: 0xFF4B3E),
-        isDark:  true
-    )
-
-    /// The light set is not an inversion. Status colours are darkened rather
-    /// than lightened, because #FF4B3E on paper has almost no contrast and a
-    /// red that has to be re-tuned is a red that will drift the next time
-    /// someone tweaks it.
-    static let light = Theme(
-        bg:      Color(hex: 0xF4F3EF),
-        surface: Color(hex: 0xEAE9E3),
-        raised:  Color(hex: 0xFFFFFF),
-        rule:    Color(hex: 0xCBC9C0),
-        ruleSoft:Color(hex: 0xE0DED6),
-        textHi:  Color(hex: 0x14150F),
-        textMid: Color(hex: 0x5A5C55),
-        textLow: Color(hex: 0x8A8C84),
-        accent:  Color(hex: 0xA66400),
-        good:    Color(hex: 0x0B7A3E),
-        warn:    Color(hex: 0x9A6200),
-        danger:  Color(hex: 0xBE2318),
-        isDark:  false
-    )
 }
 
 extension Color {
-    /// 0xRRGGBB. Written out rather than using `.init(.sRGB:)` so a hex in a
-    /// theme literal above is copy-pasteable from any colour picker.
+    /// 0xRRGGBB. Written out rather than `.init(.sRGB:)` so a hex in a palette
+    /// literal below is copy-pasteable from any colour picker.
     init(hex: UInt32) {
         self.init(.sRGB,
                   red:   Double((hex >> 16) & 0xFF) / 255,
@@ -106,34 +70,194 @@ extension Color {
     }
 }
 
-/// The live theme. Read through `Palette`, never touched directly.
-///
-/// A stored static rather than an environment value: every control in this app
-/// already reads `Palette` by name, and threading a theme through the
-/// environment would mean touching 40 call sites to change a colour. The store
-/// republishes on toggle, so anything observing it re-renders and re-reads this.
-enum ThemeController {
-    static var current: Theme = Theme.dark
+// MARK: - Skin
 
-    static func set(dark: Bool) { current = dark ? .dark : .light }
+/// Structural decisions a palette cannot express.
+///
+/// This is the part that keeps a skin switch from being a rewrite. Colours are
+/// data, but "cards are filled blocks with a 6px radius" versus "cards are a
+/// top rule and nothing else" versus "cards sit on a gridded field with corner
+/// ticks" is not a colour and cannot be one — so it lives here as a flag and the
+/// components branch on it once, in one place.
+struct Skin {
+    var id: String
+    var name: String
+    var blurb: String
+
+    var dark: Palette2
+    var light: Palette2
+
+    /// Corner radius. Swiss and Blueprint are square by design; Graphite is not.
+    var radius: CGFloat
+    /// Cards get a filled background. Swiss refuses — it has no cards at all.
+    var cardFill: Bool
+    /// Draw a ruled field behind the content (Blueprint).
+    var gridBackdrop: Bool
+    /// Corner ticks and leader lines on cards (Blueprint).
+    var draftingMarks: Bool
+    /// Monospace throughout. Blueprint yes, the other two no.
+    var monospaced: Bool
+    /// Type scale. Swiss runs a far wider range — that size contrast *is* the
+    /// style — so the numbers have to come from here rather than from call sites.
+    var figureSize: CGFloat
+    var bodySize: CGFloat
+    var labelSize: CGFloat
+    var labelTracking: CGFloat
+    /// Space scale. Swiss is generous, Graphite is tight.
+    var pad: CGFloat
+    var gap: CGFloat
+
+    // MARK: The three skins
+
+    /// Restrained dark utility. No nostalgia, no costume — an 8pt spacing
+    /// scale, 1px borders, one accent, real density. The option that does not
+    /// try to be a character.
+    static let graphite = Skin(
+        id: "graphite", name: "Graphite", blurb: "Restrained dark utility",
+        dark: Palette2(
+            bg:       Color(hex: 0x16181B), surface: Color(hex: 0x1E2125),
+            raised:   Color(hex: 0x262A2F), rule:    Color(hex: 0x33383E),
+            ruleSoft: Color(hex: 0x24282D),
+            textHi:   Color(hex: 0xE8EAED), textMid: Color(hex: 0xA0A6AD),
+            textLow:  Color(hex: 0x6E757D),
+            accent:   Color(hex: 0x4C8DF6), good:   Color(hex: 0x3FB950),
+            warn:     Color(hex: 0xD29922), danger: Color(hex: 0xF85149),
+            isDark: true),
+        light: Palette2(
+            bg:       Color(hex: 0xFAFAFA), surface: Color(hex: 0xF2F3F5),
+            raised:   Color(hex: 0xFFFFFF), rule:    Color(hex: 0xDCDEE2),
+            ruleSoft: Color(hex: 0xE8EAED),
+            textHi:   Color(hex: 0x1A1C1E), textMid: Color(hex: 0x5B6067),
+            textLow:  Color(hex: 0x8B9098),
+            accent:   Color(hex: 0x1F6FEB), good:   Color(hex: 0x1A7F37),
+            warn:     Color(hex: 0x9A6700), danger: Color(hex: 0xCF222E),
+            isDark: false),
+        radius: 6, cardFill: true, gridBackdrop: false, draftingMarks: false,
+        monospaced: false, figureSize: 20, bodySize: 11, labelSize: 9,
+        labelTracking: 0.7, pad: 14, gap: 8)
+
+    /// Swiss / International Typographic. No cards, no fills, no radius — just
+    /// type, hairline rules and a great deal of air. The size contrast between a
+    /// 40pt figure and an 8pt label is not decoration, it is the hierarchy.
+    static let swiss = Skin(
+        id: "swiss", name: "Swiss", blurb: "International typographic",
+        dark: Palette2(
+            bg:       Color(hex: 0x0A0A0A), surface: Color(hex: 0x0A0A0A),
+            raised:   Color(hex: 0x141414), rule:    Color(hex: 0xE8E8E8),
+            ruleSoft: Color(hex: 0x262626),
+            textHi:   Color(hex: 0xFAFAFA), textMid: Color(hex: 0x909090),
+            textLow:  Color(hex: 0x5C5C5C),
+            accent:   Color(hex: 0xFF3B30), good:   Color(hex: 0x4ADE80),
+            warn:     Color(hex: 0xFBBF24), danger: Color(hex: 0xFF3B30),
+            isDark: true),
+        light: Palette2(
+            bg:       Color(hex: 0xFFFFFF), surface: Color(hex: 0xFFFFFF),
+            raised:   Color(hex: 0xF4F4F2), rule:    Color(hex: 0x111111),
+            ruleSoft: Color(hex: 0xD8D8D4),
+            textHi:   Color(hex: 0x000000), textMid: Color(hex: 0x4A4A4A),
+            textLow:  Color(hex: 0x8A8A8A),
+            accent:   Color(hex: 0xE30613), good:   Color(hex: 0x00874A),
+            warn:     Color(hex: 0x8A6D00), danger: Color(hex: 0xE30613),
+            isDark: false),
+        radius: 0, cardFill: false, gridBackdrop: false, draftingMarks: false,
+        monospaced: false, figureSize: 34, bodySize: 12, labelSize: 8,
+        labelTracking: 1.6, pad: 20, gap: 14)
+
+    /// Blueprint. Deep blue field, white hairlines, a faint grid, and corner
+    /// ticks on cards so a part reads as a drawing rather than a tile. Labels
+    /// are monospace; figures stay proportional so columns of numbers align.
+    static let blueprint = Skin(
+        id: "blueprint", name: "Blueprint", blurb: "Drafting table",
+        dark: Palette2(
+            bg:       Color(hex: 0x0A2540), surface: Color(hex: 0x0A2540),
+            raised:   Color(hex: 0x0E2E4F), rule:    Color(hex: 0x2A5C8F),
+            ruleSoft: Color(hex: 0x14355A),
+            textHi:   Color(hex: 0xEAF2FF), textMid: Color(hex: 0xA8C4E0),
+            textLow:  Color(hex: 0x6B90B8),
+            accent:   Color(hex: 0x4FC3F7), good:   Color(hex: 0x6FE3B0),
+            warn:     Color(hex: 0xFFD166), danger: Color(hex: 0xFF8A80),
+            isDark: true),
+        light: Palette2(
+            // The light reading is a drafting sheet, not a pale blueprint:
+            // white stock with blue ink. Inverting a blueprint gives you a
+            // photograph of a negative, which is not what anyone wants.
+            bg:       Color(hex: 0xF4F7FA), surface: Color(hex: 0xF4F7FA),
+            raised:   Color(hex: 0xFFFFFF), rule:    Color(hex: 0x2E5C8A),
+            ruleSoft: Color(hex: 0xC6D8EA),
+            textHi:   Color(hex: 0x0A2540), textMid: Color(hex: 0x3D6B99),
+            textLow:  Color(hex: 0x7FA3C4),
+            accent:   Color(hex: 0x0A6EB8), good:   Color(hex: 0x0E7C4A),
+            warn:     Color(hex: 0x9A6700), danger: Color(hex: 0xB4231C),
+            isDark: false),
+        radius: 0, cardFill: false, gridBackdrop: true, draftingMarks: true,
+        monospaced: true, figureSize: 24, bodySize: 11, labelSize: 8,
+        labelTracking: 1.2, pad: 16, gap: 10)
+
+    static let all: [Skin] = [.graphite, .swiss, .blueprint]
+
+    static func named(_ id: String) -> Skin {
+        all.first { $0.id == id } ?? .graphite
+    }
 }
 
-/// Kept as named accessors rather than `Theme` fields so the ~40 existing
-/// `Palette.x` call sites are unchanged. Every value is a computed read, so a
-/// theme switch costs one assignment and no call-site edits.
+// MARK: - Live selection
+
+/// The active skin and scheme.
+///
+/// Globals rather than environment values, for a reason that is now more load
+/// bearing than it was: the sidebar has to be able to switch skin *and* the
+/// store is the only object every view already observes, so one publish
+/// repaints the entire app. Threading a skin through the environment would mean
+/// touching every call site and every `environmentObject` to gain nothing.
+///
+/// The cost is real and worth naming: `Palette` read outside a `body` captures
+/// the value at read time, not at render time. Default arguments must therefore
+/// never default to a `Palette` value — see `Pill` and `StatTile`.
+enum SkinController {
+    static var skin: Skin = .graphite
+    static var dark: Bool = true
+
+    static var palette: Palette2 { dark ? skin.dark : skin.light }
+
+    static func set(skin newSkin: Skin, dark newDark: Bool? = nil) {
+        skin = newSkin
+        if let newDark { dark = newDark }
+    }
+}
+
+/// The user's choices, so the sidebar and Settings cannot disagree.
+enum Prefs {
+    static let skinKey = "componenttracker.skin"
+    static let darkKey = "componenttracker.darkMode"
+
+    static func load() {
+        let id = UserDefaults.standard.string(forKey: skinKey) ?? "graphite"
+        let isDark = UserDefaults.standard.object(forKey: darkKey) as? Bool ?? true
+        SkinController.set(skin: .named(id), dark: isDark)
+    }
+
+    static func save() {
+        UserDefaults.standard.set(SkinController.skin.id, forKey: skinKey)
+        UserDefaults.standard.set(SkinController.dark, forKey: darkKey)
+    }
+}
+
+/// Named accessors rather than `Palette2` fields, so the ~40 existing
+/// `Palette.x` call sites are unchanged across a skin switch. Every value is a
+/// computed read, so switching costs one assignment and no call-site edits.
 enum Palette {
-    static var bg: Color      { ThemeController.current.bg }
-    static var panel: Color   { ThemeController.current.surface }
-    static var panelHi: Color { ThemeController.current.raised }
-    static var line: Color    { ThemeController.current.rule }
-    static var lineSoft: Color{ ThemeController.current.ruleSoft }
-    static var textHi: Color  { ThemeController.current.textHi }
-    static var textMid: Color { ThemeController.current.textMid }
-    static var textLow: Color { ThemeController.current.textLow }
-    static var accent: Color  { ThemeController.current.accent }
-    static var good: Color    { ThemeController.current.good }
-    static var warn: Color    { ThemeController.current.warn }
-    static var danger: Color  { ThemeController.current.danger }
+    static var bg: Color      { SkinController.palette.bg }
+    static var panel: Color   { SkinController.palette.surface }
+    static var panelHi: Color { SkinController.palette.raised }
+    static var line: Color    { SkinController.palette.rule }
+    static var lineSoft: Color{ SkinController.palette.ruleSoft }
+    static var textHi: Color  { SkinController.palette.textHi }
+    static var textMid: Color { SkinController.palette.textMid }
+    static var textLow: Color { SkinController.palette.textLow }
+    static var accent: Color  { SkinController.palette.accent }
+    static var good: Color    { SkinController.palette.good }
+    static var warn: Color    { SkinController.palette.warn }
+    static var danger: Color  { SkinController.palette.danger }
 }
 
 // MARK: - Category colour mapping
@@ -153,13 +277,15 @@ func swiftUIColor(for category: String) -> Color {
 // MARK: - Metrics
 
 enum Metrics {
-    /// Terminal UI has no rounded corners. These are retained because call
-    /// sites still reference them, and the honest value is zero.
-    static let corner: CGFloat = 0
-    static let cornerSm: CGFloat = 0
-    /// Tighter than a consumer layout on purpose. Information density is the
-    /// point of the aesthetic, not a side effect of it.
-    static let pad: CGFloat = 14
+    /// Corner radius follows the skin. Swiss and Blueprint are square by design,
+    /// Graphite is not — so this cannot be a constant any more.
+    static var corner: CGFloat { SkinController.skin.radius }
+    static var cornerSm: CGFloat { SkinController.skin.radius }
+    /// Padding and gap are part of the style. Swiss runs open, Graphite runs
+    /// tight, and neither is a default — they are the two things that most make
+    /// a UI feel designed or generic.
+    static var pad: CGFloat { SkinController.skin.pad }
+    static var gap: CGFloat { SkinController.skin.gap }
     /// The one structural rule width. Everything divides by this.
     static let rule: CGFloat = 1
 }
@@ -174,19 +300,256 @@ enum Metrics {
 /// `.custom("Some Family-Bold")` that CoreText cannot resolve falls back
 /// silently and renders in the wrong typeface with no error anywhere.
 extension Font {
+    /// Monospaced, unconditionally. Used for figures, codes, part numbers and
+    /// paths — the places where alignment is load-bearing.
     static func mono(_ size: CGFloat, _ w: Font.Weight = .regular) -> Font {
         .system(size: size, weight: w, design: .monospaced)
     }
-    /// Kept as a separate name so the UI/mono distinction survives as a hook,
-    /// even though this theme sets both.
+
+    /// Everything else. Proportional in Graphite and Swiss, monospaced in
+    /// Blueprint, which is the one skin where the drafting convention beats the
+    /// alignment convention.
     static func ui(_ size: CGFloat, _ w: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: w, design: .monospaced)
+        .system(size: size, weight: w, design: SkinController.skin.monospaced ? .monospaced : .default)
     }
 
-    /// Bloomberg's field label: small, bold, widely tracked caps. This is the
-    /// single typographic move that reads as "instrument" rather than "app".
-    static func field(_ size: CGFloat = 9) -> Font {
-        .system(size: size, weight: .semibold, design: .monospaced)
+    /// The field label: small, bold, tracked caps. Tracking width is the skin's,
+    /// because wide tracking is Swiss and tight tracking is Graphite.
+    static func field(_ size: CGFloat? = nil) -> Font {
+        .system(size: size ?? SkinController.skin.labelSize, weight: .semibold,
+                design: SkinController.skin.monospaced ? .monospaced : .default)
+    }
+}
+
+// MARK: - Structural chrome
+
+/// The one place a skin's structure is expressed, so the rest of the app never
+/// branches on which skin is active.
+///
+/// A card in Graphite is a filled block with a radius. In Swiss it is a top rule
+/// and nothing else — no fill, no box, because a card in that language is
+/// exactly the thing the language is arguing against. In Blueprint it is a
+/// hairline box on a gridded field with corner ticks, i.e. a drawing.
+///
+/// The lint's no-flexible-children rule applies here like anywhere else. The
+/// grid is a `Canvas`, which fills its frame and adds no width negotiation.
+/// Generic over the content rather than storing an `@ViewBuilder` closure
+/// property: a stored `() -> some View` property cannot infer its opaque return
+/// type from the declaration alone, and the `FieldGroup` in EditorSheet already
+/// solves this the same way. Two shapes for the same idea is one too many, but
+/// consistency here beats novelty.
+struct CardChrome<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        let skin = SkinController.skin
+        if skin.draftingMarks {
+            ZStack(alignment: .topLeading) {
+                content
+                Canvas { ctx, size in
+                    let w = size.width - 1, h = size.height - 1
+                    var p = Path()
+                    p.move(to: .zero)
+                    p.addLine(to: CGPoint(x: w, y: 0))
+                    p.addLine(to: CGPoint(x: w, y: h))
+                    p.addLine(to: CGPoint(x: 0, y: h))
+                    p.closeSubpath()
+                    ctx.stroke(p, with: .color(Palette.line), lineWidth: 1)
+                    // Corner ticks — the drafting convention for "this extent is
+                    // the whole part", and the reason a Blueprint card reads as a
+                    // drawing rather than as a tile.
+                    let t: CGFloat = 7
+                    var ticks = Path()
+                    let corners: [(CGFloat, CGFloat, CGFloat, CGFloat)] = [
+                        (0, 0, 1, 1), (w, 0, -1, 1), (0, h, 1, -1), (w, h, -1, -1),
+                    ]
+                    for (cx, cy, dx, dy) in corners {
+                        ticks.move(to: CGPoint(x: cx, y: cy + dy * t))
+                        ticks.addLine(to: CGPoint(x: cx, y: cy))
+                        ticks.move(to: CGPoint(x: cx + dx * t, y: cy))
+                        ticks.addLine(to: CGPoint(x: cx, y: cy))
+                    }
+                    ctx.stroke(ticks, with: .color(Palette.accent.opacity(0.8)), lineWidth: 1)
+                }
+            }
+        } else if skin.cardFill {
+            content
+                .background(skinShape.fill(Palette.panel))
+                .overlay(skinShape.strokeBorder(Palette.line, lineWidth: 1))
+        } else {
+            // Swiss: a rule above, and nothing else. A box here would undo the
+            // whole style.
+            VStack(alignment: .leading, spacing: 0) {
+                Rule()
+                content.padding(.top, 9)
+            }
+        }
+    }
+
+    /// Radius is the skin's, so this is the only place it is read.
+    private var skinShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: SkinController.skin.radius, style: .continuous)
+    }
+}
+
+/// Blueprint's ruled field. Drawn rather than tiled from an asset so it inherits
+/// the palette automatically — a baked grid image would have to be regenerated
+/// per scheme, and would be one more thing to forget.
+struct GridBackdrop: View {
+    var spacing: CGFloat = 24
+
+    var body: some View {
+        Canvas { ctx, size in
+            var p = Path()
+            var x: CGFloat = 0
+            while x <= size.width {
+                p.move(to: CGPoint(x: x, y: 0)); p.addLine(to: CGPoint(x: x, y: size.height))
+                x += spacing
+            }
+            var y: CGFloat = 0
+            while y <= size.height {
+                p.move(to: CGPoint(x: 0, y: y)); p.addLine(to: CGPoint(x: size.width, y: y))
+                y += spacing
+            }
+            ctx.stroke(p, with: .color(Palette.lineSoft.opacity(0.55)), lineWidth: 0.5)
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+// MARK: - Appearance controls
+
+/// The two schemes as a mutually exclusive pair.
+///
+/// A pair rather than a switch, because that is how every other exclusive
+/// choice in this app reads — the card/table toggle, the sidebar selection —
+/// and a `Toggle` would be the only control on screen with two visual idioms.
+/// Solid fill marks the live one, and its text flips to the background colour,
+/// which is inverse video and costs nothing.
+///
+/// Lives here rather than in the sidebar because the sidebar and Settings both
+/// need it and two copies of an exclusive-pair control is how they drift apart
+/// and then disagree about what is selected.
+struct SchemePair: View {
+    @EnvironmentObject private var store: InventoryStore
+    /// Settings has room for a fixed width beside a label; the sidebar does not.
+    var fixedWidth: CGFloat? = nil
+
+    var body: some View {
+        HStack(spacing: 0) {
+            button("Dark", isOn: store.darkMode)  { store.darkMode = true }
+            Rule(axis: .vertical)
+            button("Light", isOn: !store.darkMode) { store.darkMode = false }
+            // lint:allow greedy — a two-up exclusive pair that does not span
+            // the width it is offered reads as an accidental gap, and this
+            // Spacer is the outermost child of the stack, so it competes with
+            // nothing. It is also the one child whose greed is the point: the
+            // two halves must be equal, and only one of them can absorb the
+            // slack.
+            if fixedWidth == nil { Spacer(minLength: 0) }
+        }
+        .overlay(Rectangle().strokeBorder(Palette.line, lineWidth: Metrics.rule))
+    }
+
+    private func button(_ name: String, isOn: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(name.uppercased())
+                .font(.field())
+                .tracking(SkinController.skin.labelTracking)
+                .foregroundStyle(isOn ? Palette.bg : Palette.textMid)
+                .frame(width: fixedWidth, height: fixedWidth == nil ? nil : 24)
+                .frame(maxWidth: fixedWidth == nil ? .infinity : nil)
+                .padding(.vertical, 5)
+                .background(isOn ? Palette.accent : Color.clear)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Current: \(name.lowercased())" + (isOn ? "" : " — click to switch"))
+    }
+}
+
+/// The three skins, each with a live swatch drawn from its own palette.
+///
+/// The swatch is not decoration. Three designs that are all "a dark UI" are
+/// indistinguishable from their names, so the row has to carry the thing you
+/// are actually choosing. It draws from the skin's own colours rather than from
+/// the live palette, which means each row previews its own skin even while a
+/// different one is selected.
+struct SkinPicker: View {
+    @EnvironmentObject private var store: InventoryStore
+    /// The sidebar stacks rows full-bleed; Settings pads them.
+    var rowPadding: CGFloat? = nil
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(Skin.all, id: \.id) { skin in
+                SkinRow(skin: skin, active: store.skinID == skin.id) { store.skinID = skin.id }
+                    .padding(.horizontal, rowPadding ?? 0)
+            }
+        }
+    }
+}
+
+struct SkinRow: View {
+    var skin: Skin
+    var active: Bool
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                SkinSwatch(skin: skin)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(skin.name)
+                        .font(.ui(SkinController.skin.bodySize, active ? .bold : .regular))
+                        .foregroundStyle(active ? Palette.accent : Palette.textHi)
+                    Text(skin.blurb)
+                        .font(.ui(SkinController.skin.labelSize))
+                        .foregroundStyle(Palette.textLow)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                // A tick, not a filled row. Filling the row would recolour the
+                // swatch's own neighbourhood and destroy the preview it exists
+                // to provide.
+                Text(active ? "\u{2713}" : "")
+                    .font(.ui(SkinController.skin.bodySize, .bold))
+                    .foregroundStyle(Palette.accent)
+            }
+            .padding(.horizontal, Metrics.pad)
+            .padding(.vertical, 5)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Switch to \(skin.name) — \(skin.blurb)")
+    }
+}
+
+/// Three bands, a rule, a figure and a fill from the named skin's own palette:
+/// enough to tell a filled card from a ruled one and a dense grid from an open
+/// page, which is the actual difference between these three designs.
+struct SkinSwatch: View {
+    var skin: Skin
+
+    private var p: Palette2 { SkinController.dark ? skin.dark : skin.light }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Rectangle().fill(p.bg).frame(width: 11, height: 22)
+            Rectangle().fill(p.surface).frame(width: 6, height: 22)
+            VStack(spacing: 1) {
+                Rectangle().fill(p.rule).frame(width: 7, height: 1)
+                Rectangle().fill(p.accent).frame(width: 7, height: 5)
+                Rectangle().fill(p.textHi).frame(width: 5, height: 4)
+            }
+            .frame(width: 7, height: 22)
+            .background(p.bg)
+        }
+        .overlay(Rectangle().strokeBorder(p.rule, lineWidth: 1))
     }
 }
 

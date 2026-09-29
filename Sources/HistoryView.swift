@@ -38,7 +38,12 @@ struct HistoryView: View {
                 content.padding(Metrics.pad)
             }
         }
-        .background(Palette.bg)
+        .background {
+            ZStack(alignment: .topLeading) {
+                Palette.bg
+                if SkinController.skin.gridBackdrop { GridBackdrop() }
+            }
+        }
         .confirmationDialog(
             "Clear all \(store.consumed.count) log entr\(store.consumed.count == 1 ? "y" : "ies")?",
             isPresented: $ui.showClearConfirm, titleVisibility: .visible
