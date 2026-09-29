@@ -599,8 +599,6 @@ struct Tests {
             .contains { $0.hasPrefix("inventory-corrupt-") }
         check("corrupt file preserved as backup", parked)
 
-        try? FileManager.default.removeItem(at: tmp)
-
         print("\n== skins ==")
 
         check("three skins ship", Skin.all.count == 3)
@@ -729,7 +727,25 @@ struct Tests {
         UserDefaults.standard.set(true, forKey: Prefs.darkKey)
         UserDefaults.standard.set("graphite", forKey: Prefs.skinKey)
 
-        print("\n\(checks - failures)/\(checks) checks passed")
+        // Cleanup happens BEFORE the exit, not after it.
+        //
+        // Two things were wrong with this. It sat at the end of the
+        // corrupt-file block, which was the end of the file when that block was
+        // written; every test added since then ran after it and wrote into the
+        // same directory, so each run leaked a `ct-test-<uuid>`. And it was
+        // written after `exit(1)`, so a failing run leaked the directory too —
+        // which is precisely when you most want it left behind to look at.
+        //
+        // A hard crash (a force-unwrap, a signal) still skips this, and
+        // deliberately so: that is the one case where the contents of `tmp`
+        // are the evidence. `exit()` does not run `defer`, so the removal is
+        // sequenced by hand here rather than papered over with a `defer` that
+        // would read as unconditional and quietly not be.
+        let summary = "\(checks - failures)/\(checks) checks passed"
+        let leftover = (try? FileManager.default.removeItem(at: tmp)) == nil
+        if leftover { print("warning: could not remove \(tmp.path)") }
+
+        print("\n\(summary)")
         if failures > 0 { print("\(failures) FAILURES"); exit(1) }
         print("all good")
     }
