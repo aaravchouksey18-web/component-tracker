@@ -2,26 +2,20 @@ import SwiftUI
 
 // MARK: - Sidebar
 
+/// Reads as a command panel rather than a navigation list. The one idea worth
+/// naming: a selected row is drawn in *inverse video* — accent fill, background
+/// text — because that is what selection looks like in a terminal, and it
+/// replaces the coloured-pill-and-left-bar treatment with something that
+/// belongs to the rest of this design instead of fighting it.
 struct Sidebar: View {
     @EnvironmentObject private var store: InventoryStore
     @EnvironmentObject private var pi: PiSyncController
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("COMPONENT TRACKER")
-                    .font(.ui(11, .bold))
-                    .tracking(1.4)
-                    .foregroundStyle(Palette.textHi)
-                Text("\(store.totalUnits) units on hand")
-                    .font(.mono(10))
-                    .foregroundStyle(Palette.textLow)
-            }
-            .padding(.horizontal, Metrics.pad)
-            .padding(.top, 6)
-            .padding(.bottom, 16)
+            header
 
-            VStack(spacing: 2) {
+            VStack(spacing: 0) {
                 ForEach(Section.allCases) { s in
                     SidebarRow(section: s,
                                active: store.section == s,
@@ -36,11 +30,11 @@ struct Sidebar: View {
             if !store.categoryCounts.isEmpty {
                 SectionLabel("By category")
                     .padding(.horizontal, Metrics.pad)
-                    .padding(.top, 20)
-                    .padding(.bottom, 7)
+                    .padding(.top, 18)
+                    .padding(.bottom, 6)
 
                 ScrollView {
-                    VStack(spacing: 1) {
+                    VStack(spacing: 0) {
                         ForEach(store.categoryCounts, id: \.0) { pair in
                             CategoryRow(name: pair.0,
                                         count: pair.1,
@@ -61,13 +55,34 @@ struct Sidebar: View {
             }
 
             Spacer(minLength: 0)
-
-            Divider().overlay(Palette.lineSoft)
+            Rule()
             PiStatusBar()
         }
-        .padding(.vertical, 14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Palette.bg)
+    }
+
+    /// A shell prompt, then the live count. The `$` is the whole personality of
+    /// this header in four pixels.
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("component-tracker")
+                .font(.ui(12, .bold))
+                .tracking(0.8)
+                .foregroundStyle(Palette.textHi)
+            HStack(spacing: 5) {
+                Text("$")
+                    .font(.mono(10, .bold))
+                    .foregroundStyle(Palette.accent)
+                Text("\(store.totalUnits) units on hand")
+                    .font(.mono(10))
+                    .foregroundStyle(Palette.textLow)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, Metrics.pad)
+        .padding(.top, 8)
+        .padding(.bottom, 14)
     }
 
     private func badge(for s: Section) -> Int? {
@@ -86,36 +101,39 @@ struct SidebarRow: View {
     var badge: Int?
     var action: () -> Void
 
+    private var badgeTint: Color {
+        section == .outOfStock ? Palette.danger : Palette.warn
+    }
+
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 9) {
+            HStack(spacing: 0) {
+                // The prompt. Reserve the slot on every row so labels stay in
+                // one column whether or not anything is selected.
+                Text("›")
+                    .font(.mono(11, .bold))
+                    .foregroundStyle(active ? Palette.bg : .clear)
+                    .frame(width: 12)
                 Image(systemName: section.icon)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(active ? Palette.textHi : Palette.textMid)
-                    .frame(width: 16)
+                    .font(.system(size: 11, weight: .regular))
+                    .foregroundStyle(active ? Palette.bg : Palette.textLow)
+                    .frame(width: 18)
                 Text(section.label)
-                    .font(.ui(12, active ? .semibold : .regular))
-                    .foregroundStyle(active ? Palette.textHi : Palette.textMid)
-                Spacer(minLength: 4)
+                    .font(.ui(11, active ? .bold : .regular))
+                    .foregroundStyle(active ? Palette.bg : Palette.textMid)
+                    .lineLimit(1)
+                Spacer(minLength: 6)
                 if let badge {
-                    Text("\(badge)")
-                        .font(.mono(9, .semibold))
-                        .foregroundStyle(section == .outOfStock ? Palette.danger : Palette.warn)
-                        .padding(.horizontal, 5).padding(.vertical, 2)
-                        .background(Capsule().fill((section == .outOfStock ? Palette.danger : Palette.warn).opacity(0.15)))
+                    // Bracketed count — the terminal's stand-in for a badge.
+                    Text("[\(badge)]")
+                        .font(.mono(10, .semibold))
+                        .foregroundStyle(active ? Palette.bg : badgeTint)
                 }
             }
             .padding(.horizontal, Metrics.pad)
-            .padding(.vertical, 7)
-            .background(
-                RoundedRectangle(cornerRadius: Metrics.cornerSm, style: .continuous)
-                    .fill(active ? Palette.panelHi : .clear)
-            )
-            .overlay(alignment: .leading) {
-                if active {
-                    Capsule().fill(Palette.accent).frame(width: 2, height: 14)
-                }
-            }
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(active ? Palette.accent : .clear)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -130,26 +148,31 @@ struct CategoryRow: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
-                Circle()
+            HStack(spacing: 0) {
+                Text("›")
+                    .font(.mono(11, .bold))
+                    .foregroundStyle(active ? Palette.bg : .clear)
+                    .frame(width: 12)
+                // A 4pt block in the category colour, not a dot. Square
+                // because everything else here is square.
+                Rectangle()
                     .fill(swiftUIColor(for: name))
-                    .frame(width: 5, height: 5)
-                    .opacity(active ? 1 : 0.7)
+                    .frame(width: 4, height: 9)
+                    .opacity(active ? 1 : 0.65)
                 Text(name)
-                    .font(.ui(11, active ? .semibold : .regular))
-                    .foregroundStyle(active ? Palette.textHi : Palette.textMid)
+                    .font(.ui(10, active ? .bold : .regular))
+                    .foregroundStyle(active ? Palette.bg : Palette.textMid)
                     .lineLimit(1)
-                Spacer(minLength: 4)
+                    .padding(.leading, 6)
+                Spacer(minLength: 6)
                 Text("\(count)")
                     .font(.mono(10))
-                    .foregroundStyle(Palette.textLow)
+                    .foregroundStyle(active ? Palette.bg : Palette.textLow)
             }
             .padding(.horizontal, Metrics.pad)
-            .padding(.vertical, 5)
-            .background(
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(active ? Palette.panelHi : .clear)
-            )
+            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(active ? Palette.accent : .clear)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -161,23 +184,25 @@ struct PiStatusBar: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Circle()
+            // Block indicator rather than a dot: a blinking block is what a
+            // terminal shows for "waiting", and this row is a waiting indicator.
+            Rectangle()
                 .fill(pi.config.enabled ? Palette.good : Palette.textLow)
                 .frame(width: 5, height: 5)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(pi.config.enabled ? "Pi sync on" : "Pi sync off")
-                    .font(.ui(10, .medium))
-                    .foregroundStyle(Palette.textMid)
-                if pi.config.enabled {
-                    Text(pi.config.displayString)
-                        .font(.mono(9))
-                        .foregroundStyle(Palette.textLow)
-                        .lineLimit(1)
-                }
+            Text(pi.config.enabled ? "PI SYNC" : "PI SYNC OFF")
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .tracking(0.5)
+                .foregroundStyle(pi.config.enabled ? Palette.good : Palette.textLow)
+            if pi.config.enabled {
+                Text(pi.config.displayString)
+                    .font(.mono(9))
+                    .foregroundStyle(Palette.textLow)
+                    .lineLimit(1)
+                    .truncationMode(.head)
             }
             Spacer(minLength: 0)
         }
         .padding(.horizontal, Metrics.pad)
-        .padding(.top, 10)
+        .padding(.vertical, 8)
     }
 }

@@ -19,7 +19,7 @@ struct ComponentTable: View {
             }
             .width(14)
 
-            TableColumn("Part Number", sortUsing: KeyPathComparator(\.partNumber)) { c in
+            TableColumn("PART NO.", sortUsing: KeyPathComparator(\.partNumber)) { c in
                 Text(c.partNumber.isEmpty ? "—" : c.partNumber)
                     .font(.mono(12, .medium))
                     .foregroundStyle(c.partNumber.isEmpty ? Palette.textLow : Palette.textHi)
@@ -27,7 +27,7 @@ struct ComponentTable: View {
             }
             .width(min: 130, ideal: 165)
 
-            TableColumn("Name", sortUsing: KeyPathComparator(\.name)) { c in
+            TableColumn("DESCRIPTION", sortUsing: KeyPathComparator(\.name)) { c in
                 VStack(alignment: .leading, spacing: 1) {
                     Text(c.name.isEmpty ? "Unnamed" : c.name)
                         .font(.ui(12))
@@ -43,26 +43,27 @@ struct ComponentTable: View {
             }
             .width(min: 150, ideal: 230)
 
-            TableColumn("Category", sortUsing: KeyPathComparator(\.category)) { c in
+            TableColumn("CATEGORY", sortUsing: KeyPathComparator(\.category)) { c in
                 Pill(text: c.category, tint: swiftUIColor(for: c.category))
             }
             .width(min: 90, ideal: 118)
 
-            TableColumn("Qty", sortUsing: KeyPathComparator(\.quantity)) { c in
-                HStack(spacing: 4) {
-                    Text("\(c.quantity)")
-                        .font(.mono(12, .medium))
-                        .foregroundStyle(qtyColor(c))
+            TableColumn("QTY", sortUsing: KeyPathComparator(\.quantity)) { c in
+                HStack(spacing: 2) {
+                    Spacer(minLength: 0)
                     if c.minimumStock > 0 {
                         Text("/\(c.minimumStock)")
                             .font(.mono(10))
                             .foregroundStyle(Palette.textLow)
                     }
+                    Text("\(c.quantity)")
+                        .font(.mono(12, .medium))
+                        .foregroundStyle(qtyColor(c))
                 }
             }
             .width(min: 54, ideal: 66)
 
-            TableColumn("Location", sortUsing: KeyPathComparator(\.location)) { c in
+            TableColumn("LOCATION", sortUsing: KeyPathComparator(\.location)) { c in
                 Text(c.location.isEmpty ? "—" : c.location)
                     .font(.mono(11))
                     .foregroundStyle(c.location.isEmpty ? Palette.textLow : Palette.textMid)
@@ -70,10 +71,11 @@ struct ComponentTable: View {
             }
             .width(min: 70, ideal: 110)
 
-            TableColumn("Total", sortUsing: KeyPathComparator(\.totalValue)) { c in
+            TableColumn("VALUE", sortUsing: KeyPathComparator(\.totalValue)) { c in
                 Text(c.unitCost > 0 ? currency(c.totalValue) : "—")
                     .font(.mono(11))
                     .foregroundStyle(Palette.textMid)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
             .width(min: 60, ideal: 80)
 
@@ -85,6 +87,10 @@ struct ComponentTable: View {
             }
             .width(66)
         }
+        // SwiftUI ships only `.inset` and `.automatic` — there is no `.plain`
+        // TableStyle to reach for. `.inset(alternatesRowBackgrounds:)` is the
+        // closest ledger-like option, and `.scrollContentBackground(.hidden)`
+        // below lets the theme own the colour instead of the style's greys.
         .tableStyle(.inset(alternatesRowBackgrounds: true))
         .scrollContentBackground(.hidden)
         .background(Palette.bg)
@@ -145,10 +151,10 @@ struct ComponentTable: View {
 struct StockDot: View {
     var level: Component.StockLevel
     var body: some View {
-        Circle()
+        Rectangle()
             .fill(color)
             .frame(width: 6, height: 6)
-            .opacity(level == .ok ? 0.45 : 1)
+            .opacity(level == .ok ? 0.4 : 1)
     }
     private var color: Color {
         switch level {
@@ -198,7 +204,10 @@ struct ComponentCardGrid: View {
     var onTakeOut: (Component) -> Void
     var onDelete: (Component) -> Void
 
-    private let columns = [GridItem(.adaptive(minimum: 215, maximum: 320), spacing: 12)]
+    // Denser than the old 215pt minimum. Information density is the point of
+    // this aesthetic, and a ledger that wastes a third of a screen on padding
+    // is not a ledger.
+    private let columns = [GridItem(.adaptive(minimum: 190, maximum: 300), spacing: 8)]
 
     var body: some View {
         ScrollView {
@@ -210,7 +219,7 @@ struct ComponentCardGrid: View {
                                   onDelete: { onDelete(c) })
                 }
             }
-            .padding(Metrics.pad)
+            .padding(10)
         }
         .background(Palette.bg)
     }
@@ -224,18 +233,18 @@ struct ComponentCard: View {
     var onDelete: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 8) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(component.partNumber.isEmpty ? "—" : component.partNumber)
-                        .font(.mono(13, .semibold))
+                        .font(.mono(12, .bold))
                         .foregroundStyle(Palette.textHi)
                         .lineLimit(1)
                     Text(component.name.isEmpty ? "Unnamed" : component.name)
-                        .font(.ui(11))
+                        .font(.ui(10))
                         .foregroundStyle(Palette.textMid)
                         .lineLimit(2)
-                        .frame(height: 28, alignment: .top)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
                 StockDot(level: component.stockLevel)
@@ -259,7 +268,7 @@ struct ComponentCard: View {
                 }
             }
 
-            Divider().overlay(Palette.lineSoft)
+            Rule(weight: Palette.lineSoft)
 
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 1) {
@@ -291,17 +300,11 @@ struct ComponentCard: View {
                     .disabled(component.quantity == 0)
                 GhostButton(title: "Edit", systemImage: "pencil") { onEdit() }
                 Spacer(minLength: 0)
-                Button(action: onDelete) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Palette.textLow)
-                }
-                .buttonStyle(.plain)
-                .help("Delete")
+                GhostButton(title: "Delete") { onDelete() }
             }
         }
-        .padding(13)
-        .panel()
+        .padding(10)
+        .overlay(Rectangle().strokeBorder(Palette.line, lineWidth: Metrics.rule))
         .contextMenu {
             Button("Edit…") { onEdit() }
             Button("Take Out…") { onTakeOut() }

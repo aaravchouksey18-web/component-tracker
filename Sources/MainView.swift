@@ -12,7 +12,11 @@ struct ComponentTrackerApp: App {
     var body: some Scene {
         WindowGroup {
             MainView(ui: ui)
-                .preferredColorScheme(.dark)
+                // Driven by the store rather than hardcoded, so the OS-drawn
+                // chrome (title bar, scrollbars, focus rings on native controls)
+                // agrees with the SwiftUI palette instead of staying dark while
+                // the app underneath is light.
+                .preferredColorScheme(store.darkMode ? .dark : .light)
                 .tint(Palette.accent)
         }
         .defaultSize(width: 1180, height: 760)
@@ -218,12 +222,13 @@ struct MainView: View {
 
     private var listHeader: some View {
         HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(titleText)
-                    .font(.ui(16, .semibold))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(titleText.uppercased())
+                    .font(.ui(13, .bold))
+                    .tracking(1.0)
                     .foregroundStyle(Palette.textHi)
                 Text("\(store.filtered.count) of \(store.components.count) component\(store.components.count == 1 ? "" : "s")")
-                    .font(.ui(11))
+                    .font(.ui(10))
                     .foregroundStyle(Palette.textLow)
             }
 
@@ -250,23 +255,26 @@ struct MainView: View {
                     Button {
                         store.categoryFilter = nil
                     } label: {
-                        HStack(spacing: 5) {
-                            Text(cat).font(.ui(10, .semibold))
-                            Image(systemName: "xmark").font(.system(size: 8, weight: .bold))
+                        HStack(spacing: 4) {
+                            Text(cat.uppercased())
+                                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                                .tracking(0.5)
+                            Text("×")
+                                .font(.mono(10, .bold))
                         }
                         .foregroundStyle(Palette.textMid)
-                        .padding(.horizontal, 8).padding(.vertical, 4)
-                        .background(Capsule().fill(Palette.panelHi))
-                        .overlay(Capsule().strokeBorder(Palette.line, lineWidth: 1))
+                        .padding(.horizontal, 6).padding(.vertical, 3)
+                        .overlay(Rectangle().strokeBorder(Palette.line, lineWidth: Metrics.rule))
                     }
                     .buttonStyle(.plain)
+                    .help("Clear category filter")
                 }
                 SearchField(text: $store.searchText)
                 viewToggle
             }
         }
         .padding(.horizontal, Metrics.pad)
-        .padding(.vertical, 13)
+        .padding(.vertical, 11)
     }
 
     private var titleText: String {
@@ -274,31 +282,29 @@ struct MainView: View {
         return store.section.label
     }
 
+    /// Two mutually exclusive modes, so the active one is filled solid rather
+    /// than tinted — the same inverse-video rule the sidebar uses, applied
+    /// consistently instead of inventing a second way of saying "selected".
     private var viewToggle: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 0) {
             iconToggle(isOn: !store.cardView, icon: "list.bullet", help: "Table view") {
                 store.cardView = false
             }
+            Rule(axis: .vertical)
             iconToggle(isOn: store.cardView, icon: "square.grid.2x2", help: "Card view") {
                 store.cardView = true
             }
         }
-        .padding(2)
-        .background(RoundedRectangle(cornerRadius: Metrics.cornerSm, style: .continuous).fill(Palette.panel))
-        .overlay(RoundedRectangle(cornerRadius: Metrics.cornerSm, style: .continuous)
-            .strokeBorder(Palette.lineSoft, lineWidth: 1))
+        .overlay(Rectangle().strokeBorder(Palette.line, lineWidth: Metrics.rule))
     }
 
     private func iconToggle(isOn: Bool, icon: String, help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(isOn ? Color.black : Palette.textMid)
-                .frame(width: 26, height: 22)
-                .background(
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(isOn ? Palette.accent : .clear)
-                )
+                .foregroundStyle(isOn ? Palette.bg : Palette.textMid)
+                .frame(width: 26, height: 21)
+                .background(isOn ? Palette.accent : Color.clear)
         }
         .buttonStyle(.plain)
         .help(help)
@@ -376,35 +382,43 @@ struct MainView: View {
 
 // MARK: - Search field
 
+/// A command line, not a search box. The `/` prompt is the terminal's own
+/// convention for "filter this", and it gives the field an identity that a
+/// magnifying-glass icon never did.
+///
+/// Focus is shown by inverting the prompt and brightening the rule, rather than
+/// by a glow — same selection language as everywhere else in this theme.
 struct SearchField: View {
     @Binding var text: String
     @FocusState private var focused: Bool
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Palette.textLow)
-            TextField("Search part number, value, location…", text: $text)
+            Text("/")
+                .font(.mono(12, .bold))
+                .foregroundStyle(focused ? Palette.accent : Palette.textLow)
+            TextField("search", text: $text)
                 .textFieldStyle(.plain)
-                .font(.ui(12))
+                .font(.ui(11))
                 .foregroundStyle(Palette.textHi)
                 .focused($focused)
             if !text.isEmpty {
                 Button { text = "" } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 11))
+                    Text("esc")
+                        .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                        .tracking(0.4)
                         .foregroundStyle(Palette.textLow)
                 }
                 .buttonStyle(.plain)
+                .help("Clear search")
             }
         }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 6)
-        .frame(width: 250)
-        .background(RoundedRectangle(cornerRadius: Metrics.cornerSm, style: .continuous).fill(Palette.panel))
-        .overlay(RoundedRectangle(cornerRadius: Metrics.cornerSm, style: .continuous)
-            .strokeBorder(focused ? Palette.textLow : Palette.lineSoft, lineWidth: 1))
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .frame(width: 230)
+        .background(Palette.bg)
+        .overlay(Rectangle().strokeBorder(focused ? Palette.accent.opacity(0.7) : Palette.line,
+                                         lineWidth: Metrics.rule))
     }
 }
 

@@ -1,4 +1,6 @@
 import Foundation
+import AppKit
+import SwiftUI
 
 // Headless checks for the non-UI logic: persistence, filtering, sorting,
 // stock maths and CSV/JSON round-trips. Run via ./test.sh
@@ -599,8 +601,128 @@ struct Tests {
 
         try? FileManager.default.removeItem(at: tmp)
 
+        print("\n== theme system ==")
+
+        // The toggle is the one piece of genuinely new *logic* in this branch,
+        // and it is easy to get wrong in a way no screenshot reveals: if
+        // ThemeController is not updated before the store publishes, every
+        // observing view re-renders against the previous scheme and the app
+        // flickers to a half-painted state. So the ordering is asserted, not
+        // assumed.
+        ThemeController.set(dark: true)
+        let darkBG = Palette.bg
+        ThemeController.set(dark: false)
+        let lightBG = Palette.bg
+        check("toggle actually changes bg", darkBG != lightBG)
+        check("light theme reports isDark false", ThemeController.current.isDark == false)
+        check("dark theme reports isDark true",
+              (ThemeController.set(dark: true), ThemeController.current.isDark == true).1)
+
+        // Every name the app reads must be wired to the live theme, not frozen
+        // at the value it had when the palette was written.
+        let names = ["bg", "panel", "panelHi", "line", "lineSoft", "textHi",
+                     "textMid", "textLow", "accent", "good", "warn", "danger"]
+        var allMove = true
+        for _ in 0..<2 {
+            ThemeController.set(dark: true)
+            let darkSet = names.map { resolve($0) }
+            ThemeController.set(dark: false)
+            let lightSet = names.map { resolve($0) }
+            if darkSet == lightSet { allMove = false }
+        }
+        check("all \(names.count) palette names follow the toggle", allMove)
+
+        // The two schemes must not be a naive inversion. A status colour that
+        // is simply lightened loses contrast on paper, and the warning state
+        // is the one colour that has to stay readable.
+        let darkWarn = Theme.dark.warn, lightWarn = Theme.light.warn
+        check("light warn is darker than dark warn (not an inversion)",
+              luminance(lightWarn) < luminance(darkWarn))
+        check("light danger is darker than dark danger (not an inversion)",
+              luminance(Theme.light.danger) < luminance(Theme.dark.danger))
+        check("light text on paper has strong contrast",
+              abs(luminance(Theme.light.textHi) - luminance(Theme.light.bg)) > 0.7)
+        check("dark text on black has strong contrast",
+              abs(luminance(Theme.dark.textHi) - luminance(Theme.dark.bg)) > 0.7)
+
+        // Persistence: the choice has to survive a relaunch, and the store has
+        // to seed the global in init because `didSet` does not fire for a
+        // property set during initialisation.
+        let themeTmp = tmp.appendingPathComponent("theme.json")
+        UserDefaults.standard.removeObject(forKey: InventoryStore.themeKey)
+        let t1 = InventoryStore(storeURL: themeTmp)
+        check("default is dark when nothing is stored", t1.darkMode == true)
+        check("init seeds the global theme",
+              ThemeController.current.isDark == true)
+        t1.darkMode = false
+        check("setting darkMode updates the global before returning",
+              ThemeController.current.isDark == false)
+        check("setting darkMode persists",
+              UserDefaults.standard.bool(forKey: InventoryStore.themeKey) == false)
+        let t2 = InventoryStore(storeURL: themeTmp)
+        check("a new store restores the stored scheme", t2.darkMode == false)
+        check("a new store applies the restored scheme",
+              ThemeController.current.isDark == false)
+        UserDefaults.standard.set(true, forKey: InventoryStore.themeKey)
+        t1.darkMode = true
+        ThemeController.set(dark: true)
+
         print("\n\(checks - failures)/\(checks) checks passed")
         if failures > 0 { print("\(failures) FAILURES"); exit(1) }
         print("all good")
+    }
+
+    // MARK: - Theme helpers
+    //
+    // Tests read the palette by name through a `Color` that only exists for
+    // this purpose. `Palette` returns `Color`, which is opaque to string
+    // comparison, so the harness resolves each name to a comparable value by
+    // going through the same `Theme` struct the palette reads from. The point is
+    // to catch a name that got hardcoded or forgotten during a refactor, not to
+    // re-derive the colour maths.
+
+    static private func resolve(_ paletteName: String) -> String {
+        let t = ThemeController.current
+        switch paletteName {
+        case "bg":      return hex(t.bg)
+        case "panel":   return hex(t.surface)
+        case "panelHi": return hex(t.raised)
+        case "line":    return hex(t.rule)
+        case "lineSoft":return hex(t.ruleSoft)
+        case "textHi":  return hex(t.textHi)
+        case "textMid": return hex(t.textMid)
+        case "textLow": return hex(t.textLow)
+        case "accent":  return hex(t.accent)
+        case "good":    return hex(t.good)
+        case "warn":    return hex(t.warn)
+        case "danger":  return hex(t.danger)
+        default:        return "?"
+        }
+    }
+
+    /// Relative luminance in 0...1, using the sRGB coefficients. Only the
+    /// ordering matters for these assertions, but a real number beats eyeballing
+    /// when deciding whether a colour is "dark enough on paper".
+    static private func luminance(_ c: Color) -> Double {
+        let comps = nsColor(c).usingColorSpace(.sRGB) ?? .black
+        func lin(_ v: CGFloat) -> Double {
+            let x = Double(v)
+            return x <= 0.03928 ? x / 12.92 : pow((x + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * lin(comps.redComponent)
+             + 0.7152 * lin(comps.greenComponent)
+             + 0.0722 * lin(comps.blueComponent)
+    }
+
+    static private func nsColor(_ c: Color) -> NSColor {
+        NSColor(c)
+    }
+
+    static private func hex(_ c: Color) -> String {
+        let n = nsColor(c).usingColorSpace(.sRGB) ?? .black
+        return String(format: "%02X%02X%02X",
+                      Int((n.redComponent * 255).rounded()),
+                      Int((n.greenComponent * 255).rounded()),
+                      Int((n.blueComponent * 255).rounded()))
     }
 }

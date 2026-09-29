@@ -11,10 +11,10 @@ struct DashboardView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 14) {
                 header
 
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 165), spacing: 12)], spacing: 12) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 158), spacing: 8)], spacing: 8) {
                     StatTile(label: "Components", value: "\(store.components.count)",
                              sub: "distinct part numbers")
                     StatTile(label: "Total units", value: "\(store.totalUnits)",
@@ -44,25 +44,26 @@ struct DashboardView: View {
                         .frame(height: 200)
                 }
             }
-            .padding(Metrics.pad)
+            .padding(12)
         }
         .background(Palette.bg)
     }
 
     var header: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text("Dashboard")
-                .font(.ui(20, .semibold))
+            Text("COMPONENTTRACKER \(store.totalUnits) UNITS ON HAND")
+                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .tracking(0.8)
                 .foregroundStyle(Palette.textHi)
             Text(store.lastSaved.map { "Saved \(relative($0))" } ?? "Not saved yet")
-                .font(.ui(11))
+                .font(.mono(10))
                 .foregroundStyle(Palette.textLow)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     var categoryChart: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 9) {
             SectionLabel("Units by category")
             Chart {
                 ForEach(store.categoryCounts, id: \.0) { name, count in
@@ -70,45 +71,55 @@ struct DashboardView: View {
                         x: .value("Units", unitsIn(name)),
                         y: .value("Category", name)
                     )
-                    .foregroundStyle(swiftUIColor(for: name).opacity(0.85))
-                    .cornerRadius(3)
+                    // Square, not 3pt-rounded: a rounded bar is a chart in a
+                    // marketing deck, a square one is a readout on an instrument.
+                    .foregroundStyle(swiftUIColor(for: name).opacity(0.9))
+                    // Annotated inline. A terminal shows you the number, not
+                    // just the shape.
+                    .annotation(position: .trailing) {
+                        Text("\(unitsIn(name))")
+                            .font(.mono(9))
+                            .foregroundStyle(Palette.textMid)
+                    }
                 }
             }
             .chartXAxis {
-                AxisMarks { _ in
-                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 3]))
-                        .foregroundStyle(Palette.lineSoft)
-                    AxisValueLabel().foregroundStyle(Palette.textLow)
+                AxisMarks(preset: .aligned, position: .bottom) { _ in
+                    AxisValueLabel()
+                        .font(.mono(9))
+                        .foregroundStyle(Palette.textLow)
                 }
             }
             .chartYAxis {
                 AxisMarks(position: .leading) { _ in
-                    AxisValueLabel().foregroundStyle(Palette.textMid)
+                    AxisValueLabel()
+                        .font(.mono(10))
+                        .foregroundStyle(Palette.textMid)
                 }
             }
             .frame(height: max(130, CGFloat(store.categoryCounts.count) * 26))
         }
-        .padding(15)
-        .panel()
+        .padding(11)
+        .overlay(Rectangle().strokeBorder(Palette.line, lineWidth: Metrics.rule))
     }
 
     var reorderList: some View {
-        VStack(alignment: .leading, spacing: 11) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
                 SectionLabel("Needs reordering")
-                Spacer()
-                Text("\(store.lowStockComponents.count) item\(store.lowStockComponents.count == 1 ? "" : "s")")
+                Spacer(minLength: 8)
+                Text("\(store.lowStockComponents.count) ITEM\(store.lowStockComponents.count == 1 ? "" : "S")")
                     .font(.mono(10))
                     .foregroundStyle(Palette.textLow)
             }
 
             VStack(spacing: 0) {
                 ForEach(Array(store.lowStockComponents.sorted { $0.stockLevel != $1.stockLevel ? $0.stockLevel == .low : $0.quantity < $1.quantity })) { c in
-                    HStack(spacing: 10) {
+                    HStack(spacing: 8) {
                         StockDot(level: c.stockLevel)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(c.partNumber.isEmpty ? c.name : c.partNumber)
-                                .font(.mono(11, .medium))
+                                .font(.mono(11, .semibold))
                                 .foregroundStyle(Palette.textHi)
                                 .lineLimit(1)
                             Text([c.name, c.supplier].filter { !$0.isEmpty }.joined(separator: " · "))
@@ -117,26 +128,27 @@ struct DashboardView: View {
                                 .lineLimit(1)
                         }
                         Spacer(minLength: 8)
-                        Text("\(c.quantity)")
-                            .font(.mono(12, .semibold))
-                            .foregroundStyle(c.stockLevel == .out ? Palette.danger : Palette.warn)
                         if c.minimumStock > 0 {
                             Text("min \(c.minimumStock)")
                                 .font(.mono(9))
                                 .foregroundStyle(Palette.textLow)
                         }
+                        Text("\(c.quantity)")
+                            .font(.mono(12, .bold))
+                            .foregroundStyle(c.stockLevel == .out ? Palette.danger : Palette.warn)
+                            .frame(width: 34, alignment: .trailing)
                         Pill(text: c.category, tint: swiftUIColor(for: c.category))
                     }
-                    .padding(.vertical, 9)
+                    .padding(.vertical, 6)
 
                     if c.id != store.lowStockComponents.last?.id {
-                        Divider().overlay(Palette.lineSoft.opacity(0.6))
+                        Rule(weight: Palette.lineSoft)
                     }
                 }
             }
         }
-        .padding(15)
-        .panel()
+        .padding(11)
+        .overlay(Rectangle().strokeBorder(Palette.line, lineWidth: Metrics.rule))
     }
 
     private func unitsIn(_ category: String) -> Int {

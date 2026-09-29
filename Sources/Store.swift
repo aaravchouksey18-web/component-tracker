@@ -102,6 +102,27 @@ final class InventoryStore: ObservableObject {
     @Published var sortAscending: Bool = true
     @Published var cardView: Bool = false
 
+    /// Phosphor-on-black or ink-on-paper.
+    ///
+    /// This lives on the store rather than in its own observable object for a
+    /// concrete reason: every view in the app already observes the store, so a
+    /// single publish here repaints all of them. A dedicated `ThemeController`
+    /// as an `ObservableObject` would need to be injected into every
+    /// `environmentObject` call site to get the same coverage.
+    ///
+    /// `Palette` reads a plain global rather than the environment, so the new
+    /// colours must be in place *before* the publish propagates. `didSet` runs
+    /// before any view re-renders, which is why it is safe here.
+    @Published var darkMode: Bool {
+        didSet {
+            guard darkMode != oldValue else { return }
+            ThemeController.set(dark: darkMode)
+            UserDefaults.standard.set(darkMode, forKey: Self.themeKey)
+        }
+    }
+
+    static let themeKey = "componenttracker.darkMode"
+
     @Published private(set) var lastSaved: Date? = nil
     @Published private(set) var statusMessage: String? = nil
 
@@ -137,6 +158,15 @@ final class InventoryStore: ObservableObject {
     nonisolated(unsafe) static var shared: InventoryStore?
 
     init(storeURL: URL? = nil) {
+        // Seed from UserDefaults *before* the first view reads `Palette`.
+        // `didSet` does not fire for a property set during initialisation, so
+        // the theme has to be pushed into the global by hand or the first frame
+        // renders the wrong scheme and then corrects itself a frame later.
+        let stored = UserDefaults.standard.object(forKey: Self.themeKey) as? Bool
+        let dark = stored ?? true
+        self.darkMode = dark
+        ThemeController.set(dark: dark)
+
         self.storeURL = storeURL ?? InventoryStore.inventoryFile
         load()
         if storeURL == nil { InventoryStore.shared = self }

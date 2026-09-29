@@ -74,7 +74,8 @@ struct ComponentEditor: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(isNew ? "New Component" : "Edit Component")
-                    .font(.ui(15, .semibold))
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .tracking(0.9)
                     .foregroundStyle(Palette.textHi)
                 Text(isNew ? "Fill in what you know — everything is optional"
                            : (component?.partNumber.isEmpty == false ? component!.partNumber : "Untitled"))
@@ -185,7 +186,11 @@ struct ComponentEditor: View {
                 }
                 .foregroundStyle(ui.draft.isOutOfStock ? Palette.danger : Palette.warn)
                 .padding(.horizontal, 10).padding(.vertical, 7)
-                .background(RoundedRectangle(cornerRadius: 6).fill((ui.draft.isOutOfStock ? Palette.danger : Palette.warn).opacity(0.10)))
+                .overlay(alignment: .leading) {
+                    Rectangle().fill(ui.draft.isOutOfStock ? Palette.danger : Palette.warn)
+                        .frame(width: 2)
+                }
+                .padding(.leading, 8)
             }
         }
     }
@@ -305,7 +310,10 @@ struct ComponentEditor: View {
         .foregroundStyle(Palette.warn)
         .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 5).fill(Palette.warn.opacity(0.09)))
+        .overlay(alignment: .leading) {
+            Rectangle().fill(Palette.warn).frame(width: 2)
+        }
+        .padding(.leading, 8)
     }
 
     /// Read-only log for this part. Shows the five most recent take-outs plus a
@@ -491,31 +499,32 @@ struct StepperField: View {
             .font(.system(size: 9, weight: .bold))
             .foregroundStyle(Palette.textMid)
             .frame(width: 18, height: 18)
-            .background(RoundedRectangle(cornerRadius: 4).fill(Palette.panelHi))
+            .overlay(Rectangle().strokeBorder(Palette.line, lineWidth: Metrics.rule))
     }
 }
 
 // MARK: - Field styling
 
 extension View {
+    /// Both fields are drawn the same way — only the typeface differs. They sit
+    /// *on* the background rather than in a raised block, which is how a text
+    /// entry behaves in a terminal: nothing to click, just a caret and a rule.
     func plainField() -> some View {
         self.font(.ui(12))
             .foregroundStyle(Palette.textHi)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 7)
-            .background(RoundedRectangle(cornerRadius: Metrics.cornerSm, style: .continuous).fill(Palette.panel))
-            .overlay(RoundedRectangle(cornerRadius: Metrics.cornerSm, style: .continuous)
-                .strokeBorder(Palette.line, lineWidth: 1))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .overlay(Rectangle().strokeBorder(Palette.line, lineWidth: Metrics.rule),
+                     alignment: .bottom)
     }
 
     func monoField() -> some View {
         self.font(.mono(12))
             .foregroundStyle(Palette.textHi)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 7)
-            .background(RoundedRectangle(cornerRadius: Metrics.cornerSm, style: .continuous).fill(Palette.panel))
-            .overlay(RoundedRectangle(cornerRadius: Metrics.cornerSm, style: .continuous)
-                .strokeBorder(Palette.line, lineWidth: 1))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .overlay(Rectangle().strokeBorder(Palette.line, lineWidth: Metrics.rule),
+                     alignment: .bottom)
     }
 }
 
@@ -533,18 +542,18 @@ struct TakeOutSheet: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Take Out")
-                        .font(.ui(15, .semibold))
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .tracking(0.9)
                         .foregroundStyle(Palette.textHi)
                     Text(component.partNumber.isEmpty ? component.name : component.partNumber)
                         .font(.mono(10))
                         .foregroundStyle(Palette.textLow)
                 }
                 Spacer()
-                Text("\(component.quantity) on hand")
-                    .font(.mono(11))
+                Text("[\(component.quantity) ON HAND]")
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .tracking(0.5)
                     .foregroundStyle(Palette.textMid)
-                    .padding(.horizontal, 9).padding(.vertical, 5)
-                    .background(Capsule().fill(Palette.panelHi))
             }
             .padding(Metrics.pad)
 

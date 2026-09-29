@@ -15,7 +15,8 @@ struct SettingsSheet: View {
         VStack(spacing: 0) {
             HStack {
                 Text("Settings")
-                    .font(.ui(15, .semibold))
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .tracking(0.9)
                     .foregroundStyle(Palette.textHi)
                 Spacer()
                 Button { dismiss() } label: {
@@ -31,6 +32,7 @@ struct SettingsSheet: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    appearanceSection
                     piSection
                     dataSection
                 }
@@ -44,6 +46,41 @@ struct SettingsSheet: View {
         }
         .frame(width: 540, height: 560)
         .background(Palette.bg)
+    }
+
+    /// The two schemes are shown as a two-way exclusive pair rather than a
+    /// switch, because that is how every other exclusive choice in this app
+    /// reads (the view toggle, the sidebar selection): solid fill marks the
+    /// live one, everything else is an outline.
+    private var appearanceSection: some View {
+        FieldGroup("Appearance") {
+            HStack(spacing: 0) {
+                schemeButton("Dark", isOn: store.darkMode) { store.darkMode = true }
+                Rule(axis: .vertical)
+                schemeButton("Light", isOn: !store.darkMode) { store.darkMode = false }
+                Spacer(minLength: 0)
+            }
+            .overlay(Rectangle().strokeBorder(Palette.line, lineWidth: Metrics.rule))
+
+            Text(store.darkMode
+                 ? "Amber on black — the default. Built for a dim bench."
+                 : "Dark ink on paper — built for daylight.")
+                .font(.ui(10))
+                .foregroundStyle(Palette.textLow)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func schemeButton(_ name: String, isOn: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(name.uppercased())
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .tracking(0.8)
+                .foregroundStyle(isOn ? Palette.bg : Palette.textMid)
+                .frame(width: 84, height: 24)
+                .background(isOn ? Palette.accent : Color.clear)
+        }
+        .buttonStyle(.plain)
     }
 
     private var piSection: some View {
@@ -118,7 +155,10 @@ struct SettingsSheet: View {
                 .foregroundStyle(tone(r))
                 .padding(10)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 6).fill(tone(r).opacity(0.10)))
+                .overlay(alignment: .leading) {
+                    Rectangle().fill(tone(r)).frame(width: 2)
+                }
+                .padding(.leading, 8)
             }
 
             if let v = pi.lastVerified {
@@ -250,7 +290,8 @@ struct ExportSheet: View {
         VStack(spacing: 0) {
             HStack {
                 Text("Export / Import")
-                    .font(.ui(15, .semibold))
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .tracking(0.9)
                     .foregroundStyle(Palette.textHi)
                 Spacer()
                 Button { dismiss() } label: {
@@ -359,7 +400,7 @@ struct ExportSheet: View {
                     .foregroundStyle(Palette.textLow)
             }
             .padding(11)
-            .panel()
+            .overlay(Rectangle().strokeBorder(Palette.line, lineWidth: Metrics.rule))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

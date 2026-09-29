@@ -73,7 +73,8 @@ struct HistoryView: View {
         HStack(alignment: .bottom, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Usage History")
-                    .font(.ui(20, .semibold))
+                    .font(.system(size: 13, weight: .bold, design: .monospaced))
+                    .tracking(1.0)
                     .foregroundStyle(Palette.textHi)
                 Text(store.consumed.isEmpty
                      ? "Nothing logged yet"
@@ -124,12 +125,19 @@ struct HistoryView: View {
                             .foregroundStyle(row.project == "Unassigned" ? Palette.textLow : Palette.textHi)
                             .frame(width: 130, alignment: .leading)
                             .lineLimit(1)
+                        // Square bar. The track behind it matters as much as
+                        // the fill: a bar floating in empty space cannot be
+                        // compared against the peak, which is the only reason
+                        // to draw one.
                         GeometryReader { geo in
-                            RoundedRectangle(cornerRadius: 3, style: .continuous)
-                                .fill(Palette.accent.opacity(row.project == "Unassigned" ? 0.25 : 0.7))
-                                .frame(width: max(2, geo.size.width * CGFloat(row.used) / CGFloat(peak)))
+                            ZStack(alignment: .leading) {
+                                Rectangle().fill(Palette.lineSoft)
+                                Rectangle()
+                                    .fill(Palette.accent.opacity(row.project == "Unassigned" ? 0.3 : 0.85))
+                                    .frame(width: max(2, geo.size.width * CGFloat(row.used) / CGFloat(peak)))
+                            }
                         }
-                        .frame(height: 8)
+                        .frame(height: 9)
                         // Gross take-outs, with returns shown separately so the
                         // figure is never negative and never misleading.
                         Text("\(row.used)")
@@ -150,7 +158,7 @@ struct HistoryView: View {
             }
         }
         .padding(15)
-        .panel()
+        .overlay(Rectangle().strokeBorder(Palette.line, lineWidth: Metrics.rule))
     }
 
     // MARK: Log
@@ -175,7 +183,7 @@ struct HistoryView: View {
             }
         }
         .padding(15)
-        .panel()
+        .overlay(Rectangle().strokeBorder(Palette.line, lineWidth: Metrics.rule))
     }
 
     private func row(_ e: ConsumptionEntry) -> some View {

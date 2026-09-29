@@ -41,79 +41,185 @@ enum Money {
     }
 }
 
+// MARK: - Theme
+
+/// One colour set. Two of them ship: a phosphor-on-black terminal, and the
+/// same instrument read as dark ink on paper for daylight.
+///
+/// Both are built from the same six-part structure, because that structure is
+/// what makes the app look like a ledger rather than a consumer product:
+/// two background steps, one raised step, two rule weights, three text steps,
+/// and four status colours that mean exactly one thing each.
+struct Theme {
+    var bg, surface, raised: Color
+    var rule, ruleSoft: Color
+    var textHi, textMid, textLow: Color
+    var accent, good, warn, danger: Color
+    var isDark: Bool
+
+    static let dark = Theme(
+        bg:      Color(hex: 0x0A0B0C),
+        surface: Color(hex: 0x111315),
+        raised:  Color(hex: 0x191C1F),
+        rule:    Color(hex: 0x24282C),
+        ruleSoft:Color(hex: 0x191C20),
+        textHi:  Color(hex: 0xD7DBDF),
+        textMid: Color(hex: 0x8B9298),
+        textLow: Color(hex: 0x5C6369),
+        accent:  Color(hex: 0xFFB000),   // amber phosphor
+        good:    Color(hex: 0x2FD07A),
+        warn:    Color(hex: 0xFFB000),
+        danger:  Color(hex: 0xFF4B3E),
+        isDark:  true
+    )
+
+    /// The light set is not an inversion. Status colours are darkened rather
+    /// than lightened, because #FF4B3E on paper has almost no contrast and a
+    /// red that has to be re-tuned is a red that will drift the next time
+    /// someone tweaks it.
+    static let light = Theme(
+        bg:      Color(hex: 0xF4F3EF),
+        surface: Color(hex: 0xEAE9E3),
+        raised:  Color(hex: 0xFFFFFF),
+        rule:    Color(hex: 0xCBC9C0),
+        ruleSoft:Color(hex: 0xE0DED6),
+        textHi:  Color(hex: 0x14150F),
+        textMid: Color(hex: 0x5A5C55),
+        textLow: Color(hex: 0x8A8C84),
+        accent:  Color(hex: 0xA66400),
+        good:    Color(hex: 0x0B7A3E),
+        warn:    Color(hex: 0x9A6200),
+        danger:  Color(hex: 0xBE2318),
+        isDark:  false
+    )
+}
+
+extension Color {
+    /// 0xRRGGBB. Written out rather than using `.init(.sRGB:)` so a hex in a
+    /// theme literal above is copy-pasteable from any colour picker.
+    init(hex: UInt32) {
+        self.init(.sRGB,
+                  red:   Double((hex >> 16) & 0xFF) / 255,
+                  green: Double((hex >>  8) & 0xFF) / 255,
+                  blue:  Double( hex        & 0xFF) / 255,
+                  opacity: 1)
+    }
+}
+
+/// The live theme. Read through `Palette`, never touched directly.
+///
+/// A stored static rather than an environment value: every control in this app
+/// already reads `Palette` by name, and threading a theme through the
+/// environment would mean touching 40 call sites to change a colour. The store
+/// republishes on toggle, so anything observing it re-renders and re-reads this.
+enum ThemeController {
+    static var current: Theme = Theme.dark
+
+    static func set(dark: Bool) { current = dark ? .dark : .light }
+}
+
+/// Kept as named accessors rather than `Theme` fields so the ~40 existing
+/// `Palette.x` call sites are unchanged. Every value is a computed read, so a
+/// theme switch costs one assignment and no call-site edits.
+enum Palette {
+    static var bg: Color      { ThemeController.current.bg }
+    static var panel: Color   { ThemeController.current.surface }
+    static var panelHi: Color { ThemeController.current.raised }
+    static var line: Color    { ThemeController.current.rule }
+    static var lineSoft: Color{ ThemeController.current.ruleSoft }
+    static var textHi: Color  { ThemeController.current.textHi }
+    static var textMid: Color { ThemeController.current.textMid }
+    static var textLow: Color { ThemeController.current.textLow }
+    static var accent: Color  { ThemeController.current.accent }
+    static var good: Color    { ThemeController.current.good }
+    static var warn: Color    { ThemeController.current.warn }
+    static var danger: Color  { ThemeController.current.danger }
+}
+
 // MARK: - Category colour mapping
 
 func swiftUIColor(for category: String) -> Color {
     switch Categories.tint(for: category) {
-    case .teal:   return Color(red: 0.31, green: 0.80, blue: 0.78)
-    case .amber:  return Color(red: 0.98, green: 0.75, blue: 0.36)
-    case .violet: return Color(red: 0.68, green: 0.60, blue: 0.96)
-    case .blue:   return Color(red: 0.47, green: 0.68, blue: 0.98)
-    case .green:  return Color(red: 0.44, green: 0.83, blue: 0.58)
-    case .orange: return Color(red: 0.96, green: 0.62, blue: 0.42)
+    case .teal:   return Color(hex: 0x2AA198)
+    case .amber:  return Color(hex: 0xCB9B2E)
+    case .violet: return Color(hex: 0x7C6BB0)
+    case .blue:   return Color(hex: 0x4A7FC1)
+    case .green:  return Color(hex: 0x3A9E5C)
+    case .orange: return Color(hex: 0xC2683A)
     case .gray:   return Palette.textMid
     }
 }
 
-// MARK: - Minimalist black design system
-
-enum Palette {
-    static let bg          = Color(red: 0.039, green: 0.039, blue: 0.043)   // #0A0A0B
-    static let panel       = Color(red: 0.075, green: 0.075, blue: 0.082)   // #131314
-    static let panelHi     = Color(red: 0.110, green: 0.110, blue: 0.118)   // #1C1C1E
-    static let line        = Color(red: 0.165, green: 0.165, blue: 0.175)   // #2A2A2D
-    static let lineSoft    = Color(red: 0.125, green: 0.125, blue: 0.133)   // #202023
-    static let textHi      = Color(red: 0.960, green: 0.960, blue: 0.965)
-    static let textMid     = Color(red: 0.560, green: 0.560, blue: 0.585)
-    static let textLow     = Color(red: 0.380, green: 0.380, blue: 0.400)
-    static let accent      = Color(red: 1.000, green: 1.000, blue: 1.000)
-    static let warn        = Color(red: 0.980, green: 0.702, blue: 0.231)   // amber - low stock
-    static let danger      = Color(red: 0.945, green: 0.325, blue: 0.325)   // red   - out
-    static let good        = Color(red: 0.290, green: 0.780, blue: 0.549)
-}
+// MARK: - Metrics
 
 enum Metrics {
-    static let corner: CGFloat = 10
-    static let cornerSm: CGFloat = 7
-    static let pad: CGFloat = 16
+    /// Terminal UI has no rounded corners. These are retained because call
+    /// sites still reference them, and the honest value is zero.
+    static let corner: CGFloat = 0
+    static let cornerSm: CGFloat = 0
+    /// Tighter than a consumer layout on purpose. Information density is the
+    /// point of the aesthetic, not a side effect of it.
+    static let pad: CGFloat = 14
+    /// The one structural rule width. Everything divides by this.
+    static let rule: CGFloat = 1
 }
 
+// MARK: - Fonts
+
+/// Monospace everywhere, and that is not a nostalgia costume — it is the
+/// mechanism. Digits in a proportional face do not line up in a column, and a
+/// stock ledger whose numbers do not align is a worse ledger.
+///
+/// Uses the system monospaced design rather than a named face on purpose: a
+/// `.custom("Some Family-Bold")` that CoreText cannot resolve falls back
+/// silently and renders in the wrong typeface with no error anywhere.
 extension Font {
     static func mono(_ size: CGFloat, _ w: Font.Weight = .regular) -> Font {
         .system(size: size, weight: w, design: .monospaced)
     }
+    /// Kept as a separate name so the UI/mono distinction survives as a hook,
+    /// even though this theme sets both.
     static func ui(_ size: CGFloat, _ w: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: w)
+        .system(size: size, weight: w, design: .monospaced)
+    }
+
+    /// Bloomberg's field label: small, bold, widely tracked caps. This is the
+    /// single typographic move that reads as "instrument" rather than "app".
+    static func field(_ size: CGFloat = 9) -> Font {
+        .system(size: size, weight: .semibold, design: .monospaced)
     }
 }
 
-// MARK: - Reusable chrome
+// MARK: - Hairlines
 
-struct PanelBackground: ViewModifier {
-    var radius: CGFloat = Metrics.corner
-    var fill: Color = Palette.panel
-    var stroke: Color = Palette.lineSoft
-    func body(content: Content) -> some View {
-        content
-            .background(
-                RoundedRectangle(cornerRadius: radius, style: .continuous).fill(fill)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .strokeBorder(stroke, lineWidth: 1)
-            )
+/// A 1px rule. Wrapped in a view rather than sprinkled as `.frame(height: 1)`
+/// so the width is decided in one place.
+struct Rule: View {
+    var axis: Axis = .horizontal
+    var weight: Color? = nil
+    var body: some View {
+        Rectangle()
+            .fill(weight ?? Palette.line)
+            .frame(width: axis == .vertical ? Metrics.rule : nil,
+                   height: axis == .horizontal ? Metrics.rule : nil)
     }
 }
 
-extension View {
-    func panel(radius: CGFloat = Metrics.corner,
-               fill: Color = Palette.panel,
-               stroke: Color = Palette.lineSoft) -> some View {
-        modifier(PanelBackground(radius: radius, fill: fill, stroke: stroke))
-    }
-}
+// MARK: - Controls
 
-/// Minimal primary button
+/// LAYOUT CONTRACT, enforced by `lint.sh`:
+///
+/// Every shared component below must lay out *rigidly*. No `Spacer()`, no
+/// greedy `Rectangle()`/`Color.clear`, no `.frame(maxWidth: .infinity)` inside
+/// an `HStack` that also holds other content. A flexible child inside a shared
+/// component changes the width negotiation of whatever embeds it, and the
+/// symptom shows up in a different component entirely.
+///
+/// This is not hypothetical: an earlier revision made `SectionLabel` a row of
+/// `Text` plus a greedy `Rectangle`, and the rule it drew competed with the
+/// `Spacer` in the card footer — so the "IN STOCK" and "VALUE" captions drifted
+/// out of alignment with the figures underneath them. The check exists because
+/// that bug shipped past a clean test run and a clean render log.
 struct GhostButton: View {
     var title: String
     var systemImage: String? = nil
@@ -123,23 +229,23 @@ struct GhostButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 6) {
+            HStack(spacing: 5) {
                 if let systemImage {
-                    Image(systemName: systemImage).font(.system(size: 11, weight: .semibold))
+                    Image(systemName: systemImage).font(.system(size: 10, weight: .medium))
                 }
-                Text(title).font(.ui(12, .medium))
+                Text(title.uppercased())
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .tracking(0.6)
             }
-            .foregroundStyle(prominent ? Color.black : Palette.textHi)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(
-                RoundedRectangle(cornerRadius: Metrics.cornerSm, style: .continuous)
-                    .fill(prominent ? Palette.accent : Palette.panelHi)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: Metrics.cornerSm, style: .continuous)
-                    .strokeBorder(prominent ? .clear : Palette.line, lineWidth: 1)
-            )
+            .foregroundStyle(prominent ? Palette.bg : Palette.textHi)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            // Terminal buttons are outlined and hollow, not filled. The
+            // prominent one fills with accent and flips to background-coloured
+            // text — which is exactly what inverse video is.
+            .background(prominent ? Palette.accent : Color.clear)
+            .overlay(Rectangle().strokeBorder(prominent ? Palette.accent : Palette.line,
+                                             lineWidth: Metrics.rule))
             .opacity(enabled ? 1 : 0.35)
         }
         .buttonStyle(.plain)
@@ -147,64 +253,80 @@ struct GhostButton: View {
     }
 }
 
-/// Small uppercase section label
+/// Bloomberg field label: caps, tracked, dim. Deliberately *not* a row with a
+/// rule after the text — see the layout contract above.
 struct SectionLabel: View {
     var text: String
     init(_ text: String) { self.text = text }
+
     var body: some View {
         Text(text.uppercased())
-            .font(.ui(10, .semibold))
+            .font(.field())
             .tracking(0.9)
             .foregroundStyle(Palette.textLow)
+            .fixedSize()
     }
 }
 
-/// Rounded category pill
+/// Outlined tag. Terminal equivalents are square and boxed; a capsule would put
+/// this design back in the consumer-product drawer.
 struct Pill: View {
     var text: String
-    var tint: Color = Palette.textMid
+    /// Optional rather than `= Palette.textMid`. A default argument is
+    /// evaluated at the *call site*, which is a construction-time read of a
+    /// global — it captures whatever the theme was when the caller built the
+    /// view, not when the body runs. In the app that happens to coincide
+    /// (the tree is rebuilt after the store publishes), but it is one refactor
+    /// away from silently keeping stale colours, and the offscreen renderer
+    /// tripped over exactly this. Resolving nil inside `body` cannot drift.
+    var tint: Color? = nil
     var filled: Bool = false
+
     var body: some View {
+        let c = tint ?? Palette.textMid
         Text(text.uppercased())
-            .font(.ui(9, .semibold))
-            .tracking(0.7)
-            .foregroundStyle(filled ? Color.black : tint)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(
-                Capsule().fill(filled ? tint : tint.opacity(0.13))
-            )
-            .overlay(
-                Capsule().strokeBorder(filled ? .clear : tint.opacity(0.28), lineWidth: 1)
-            )
+            .font(.system(size: 9, weight: .medium, design: .monospaced))
+            .tracking(0.5)
+            .foregroundStyle(filled ? Palette.bg : c)
             .lineLimit(1)
+            .fixedSize()
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .overlay(Rectangle().strokeBorder(filled ? c : c.opacity(0.45),
+                                             lineWidth: Metrics.rule))
     }
 }
 
+/// A readout, not a card: label, figure, caption, separated by rules rather
+/// than by padding and a background block.
 struct StatTile: View {
     var label: String
     var value: String
     var sub: String? = nil
-    var tint: Color = Palette.textHi
+    /// See `Pill.tint` — resolved in `body`, never as a default argument, so a
+    /// construction-time theme read cannot freeze the colour.
+    var tint: Color? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 5) {
             SectionLabel(label)
             Text(value)
-                .font(.mono(24, .medium))
-                .foregroundStyle(tint)
+                .font(.mono(20, .medium))
+                .foregroundStyle(tint ?? Palette.textHi)
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
+            Rule(weight: Palette.lineSoft)
             if let sub {
-                Text(sub)
-                    .font(.ui(10))
+                Text(sub.uppercased())
+                    .font(.system(size: 9, design: .monospaced))
+                    .tracking(0.5)
                     .foregroundStyle(Palette.textLow)
                     .lineLimit(1)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .panel()
+        .padding(11)
+        .overlay(Rectangle().strokeBorder(Palette.line, lineWidth: Metrics.rule))
     }
 }
 
@@ -213,18 +335,20 @@ struct EmptyStateView: View {
     var title: String
     var message: String
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             Image(systemName: systemImage)
-                .font(.system(size: 34, weight: .light))
+                .font(.system(size: 28, weight: .light))
                 .foregroundStyle(Palette.textLow)
-            Text(title)
-                .font(.ui(15, .medium))
-                .foregroundStyle(Palette.textMid)
+            Text(title.uppercased())
+                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .tracking(1.0)
+                .foregroundStyle(Palette.textHi)
             Text(message)
-                .font(.ui(12))
-                .foregroundStyle(Palette.textLow)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(Palette.textMid)
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: 300)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: 340)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

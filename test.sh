@@ -14,6 +14,7 @@ xcrun swiftc \
   -sdk "$(xcrun --show-sdk-path)" \
   -framework SwiftUI \
   -framework Combine \
+  -framework AppKit \
   "$HERE/Sources/Model.swift" \
   "$HERE/Sources/Design.swift" \
   "$HERE/Sources/Store.swift" \
@@ -24,3 +25,11 @@ xcrun swiftc \
 
 echo "==> Running…"
 "$OUT"
+
+# Layout/theme lint runs after the unit tests, not before, so a logic failure is
+# still the thing you see first. It is cheap and it is the only automated check
+# that can see the class of bug a unit test structurally cannot: a view that
+# compiles, holds the right data, and lays out wrong.
+echo ""
+echo "==> Linting…"
+./lint.sh
