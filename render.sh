@@ -50,7 +50,9 @@ fi
 
 echo ""
 echo "== swatch probe =="
-"$HERE/build/SwatchProbe" "$HERE/build/renders/S-gd-sidebar.png"
+"$HERE/build/SwatchProbe" \
+  "$HERE/build/renders/S-gd-sidebar.png" \
+  "$HERE/build/renders/S-bd-cards.png"
 PROBE_OK=$?
 
 # Negative control. Expected to exit 1 (no swatches on a card grid). A 0 here

@@ -348,46 +348,70 @@ struct CardChrome<Content: View>: View {
     var body: some View {
         let skin = SkinController.skin
         if skin.draftingMarks {
-            ZStack(alignment: .topLeading) {
-                content
-                Canvas { ctx, size in
-                    let w = size.width - 1, h = size.height - 1
-                    var p = Path()
-                    p.move(to: .zero)
-                    p.addLine(to: CGPoint(x: w, y: 0))
-                    p.addLine(to: CGPoint(x: w, y: h))
-                    p.addLine(to: CGPoint(x: 0, y: h))
-                    p.closeSubpath()
-                    ctx.stroke(p, with: .color(Palette.line), lineWidth: 1)
-                    // Corner ticks — the drafting convention for "this extent is
-                    // the whole part", and the reason a Blueprint card reads as a
-                    // drawing rather than as a tile.
-                    let t: CGFloat = 7
-                    var ticks = Path()
-                    let corners: [(CGFloat, CGFloat, CGFloat, CGFloat)] = [
-                        (0, 0, 1, 1), (w, 0, -1, 1), (0, h, 1, -1), (w, h, -1, -1),
-                    ]
-                    for (cx, cy, dx, dy) in corners {
-                        ticks.move(to: CGPoint(x: cx, y: cy + dy * t))
-                        ticks.addLine(to: CGPoint(x: cx, y: cy))
-                        ticks.move(to: CGPoint(x: cx + dx * t, y: cy))
-                        ticks.addLine(to: CGPoint(x: cx, y: cy))
-                    }
-                    ctx.stroke(ticks, with: .color(Palette.accent.opacity(0.8)), lineWidth: 1)
-                }
-            }
+            // Opaque paper, then the drawing marks on top.
+            //
+            // The fill is the point and it was missing. A card with no
+            // background over a ruled field lets the field's 24pt grid run
+            // straight through the part number, the quantity and the value —
+            // measured at 16,843 grid pixels inside a single card, ~11
+            // vertical and ~7 horizontal lines across the text. A drawing sits
+            // ON the grid, not under it; the card is a window cut in the field.
+            //
+            // `cardFill` is false for this skin, which is right about the
+            // *style* — a Blueprint card has no rounded filled panel — and was
+            // being read as *transparent*, which is a different property
+            // entirely. Opacity and fill are separate questions, and the two
+            // were collapsed into one flag.
+            content
+                .background(Rectangle().fill(Palette.panel))
+                // `overlay` rather than a sibling in a `ZStack`: the overlay is
+                // sized to the base view, so the Canvas fills it exactly and
+                // never competes for layout space. In a ZStack it was another
+                // greedy child negotiating the card's width.
+                .overlay { draftingMarks }
         } else if skin.cardFill {
             content
                 .background(skinShape.fill(Palette.panel))
                 .overlay(skinShape.strokeBorder(Palette.line, lineWidth: 1))
         } else {
             // Swiss: a rule above, and nothing else. A box here would undo the
-            // whole style.
+            // whole style. Transparency is correct here precisely because Swiss
+            // has no ruled field for it to reveal.
             VStack(alignment: .leading, spacing: 0) {
                 Rule()
                 content.padding(.top, 9)
             }
         }
+    }
+
+    /// The hairline extent box and the four corner ticks.
+    private var draftingMarks: some View {
+        Canvas { ctx, size in
+            let w = size.width - 1, h = size.height - 1
+            var p = Path()
+            p.move(to: .zero)
+            p.addLine(to: CGPoint(x: w, y: 0))
+            p.addLine(to: CGPoint(x: w, y: h))
+            p.addLine(to: CGPoint(x: 0, y: h))
+            p.closeSubpath()
+            ctx.stroke(p, with: .color(Palette.line), lineWidth: 1)
+            // Corner ticks — the drafting convention for "this extent is the
+            // whole part", and the reason a Blueprint card reads as a drawing
+            // rather than as a tile.
+            let t: CGFloat = 7
+            var ticks = Path()
+            let corners: [(CGFloat, CGFloat, CGFloat, CGFloat)] = [
+                (0, 0, 1, 1), (w, 0, -1, 1), (0, h, 1, -1), (w, h, -1, -1),
+            ]
+            for (cx, cy, dx, dy) in corners {
+                ticks.move(to: CGPoint(x: cx, y: cy + dy * t))
+                ticks.addLine(to: CGPoint(x: cx, y: cy))
+                ticks.move(to: CGPoint(x: cx + dx * t, y: cy))
+                ticks.addLine(to: CGPoint(x: cx, y: cy))
+            }
+            ctx.stroke(ticks, with: .color(Palette.accent.opacity(0.8)), lineWidth: 1)
+        }
+        .allowsHitTesting(false)
     }
 
     /// Radius is the skin's, so this is the only place it is read.

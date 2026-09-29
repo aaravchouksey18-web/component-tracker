@@ -94,4 +94,87 @@ for (name, _) in accents {
 print(missing.isEmpty
       ? "PASS — all three skin swatches are drawn in the sidebar"
       : "FAIL — not drawn: \(missing.joined(separator: ", "))")
-exit(missing.isEmpty ? 0 : 1)
+
+// ---------------------------------------------------------------- backdrop leak
+//
+// The second check, and the one that would have caught the defect this probe
+// was written after: a card sitting on a ruled field must be opaque, or the
+// field runs through the text.
+//
+// Blueprint set `cardFill: false` and put a 24pt grid behind the content.
+// "Not filled" was being read as "transparent", so the grid drew straight
+// through every part number. Nothing caught it: the palette was correct, the
+// card's layout size was correct, the card rendered, and the ink percentage
+// went *up*, because grid lines are ink. Every signal the harness had said
+// fine.
+//
+// COUNT LINES, DON'T COUNT COLOURS. The first version of this check counted
+// pixels matching the grid's composite colour and used a tolerance. After the
+// fix it still reported 529 — and zero of them were the grid colour. They were
+// the card's own antialiased hairlines, which blend to within 0.035 of it. The
+// only way to make that check pass was to raise the threshold until the
+// hairlines stopped tripping it, which is tuning a test to agree with itself.
+//
+// The defect has a far better signature than a colour: a leaked field is a set
+// of *continuous vertical lines crossing the card from top to bottom*. An
+// opaque card has none, and its own hairlines run horizontally. So this counts
+// near-full-height vertical line segments inside a card-sized window.
+//
+// The threshold is 3. A leak produces ~11. Zero produces 0. The gap is wide and
+// the measurement is a count of a topological feature, not a colour
+// coincidence, so nothing here needs calibrating.
+
+func loadRep(_ path: String) -> NSBitmapImageRep? {
+    guard let b = FileManager.default.contents(atPath: path) else { return nil }
+    return NSBitmapImageRep(data: b)
+}
+
+func gridish(_ row: UnsafeMutablePointer<UInt8>, _ o: Int) -> Bool {
+    let p = (Double(row[o]) / 255, Double(row[o + 1]) / 255, Double(row[o + 2]) / 255)
+    let g = (0x0F / 255.0, 0x2E / 255.0, 0x4E / 255.0)
+    return abs(p.0 - g.0) <= 0.035 && abs(p.1 - g.1) <= 0.035 && abs(p.2 - g.2) <= 0.035
+}
+
+if let cardArg = CommandLine.arguments.dropFirst().first(where: { $0.hasSuffix("-cards.png") }),
+   let r = loadRep(cardArg), let d = r.bitmapData {
+    let bpp = r.bitsPerPixel, bpr = r.bytesPerRow
+    // A card is 285x188pt; renders are at scale 2, so 570x376px.
+    let w = 570, h = 376
+    let x0 = max(0, min(r.pixelsWide / 2 - w / 2, r.pixelsWide - w))
+    let y0 = max(0, min(r.pixelsHigh / 2 - h / 2, r.pixelsHigh - h))
+
+    // For each column, what fraction of the window's height is grid-coloured?
+    // A field line runs the full height; a hairline inside a card is a
+    // horizontal rule and so lights up only a couple of columns' worth of rows.
+    var fullHeightCols: [Int] = []
+    for x in x0..<(x0 + w) {
+        var n = 0
+        for y in y0..<(y0 + h) where gridish(d.advanced(by: y * bpr), x * (bpp / 8)) {
+            n += 1
+        }
+        if Double(n) / Double(h) > 0.75 { fullHeightCols.append(x - x0) }
+    }
+    // Collapse adjacent columns into single lines.
+    var lines: [[Int]] = []
+    for x in fullHeightCols {
+        if var last = lines.last, x - last.last! <= 2 {
+            last.append(x); lines[lines.count - 1] = last
+        } else {
+            lines.append([x])
+        }
+    }
+
+    let leak = lines.count >= 3
+    print("")
+    print("backdrop leak: \(cardArg)")
+    print("  full-height vertical lines inside a card: \(lines.count)  (limit 2)")
+    if let f = lines.first?.first, let l = lines.last?.last, lines.count > 1 {
+        print("  spanning x \(f)...\(l) at \((l - f) / (lines.count - 1))px pitch"
+              + "  (48px = the 24pt field)")
+    }
+    print(leak
+          ? "FAIL — the ruled field is drawing through the card"
+          : "PASS — cards are opaque; the field stops at the card edge")
+    if !missing.isEmpty || leak { exit(1) }
+}
+exit(0)
