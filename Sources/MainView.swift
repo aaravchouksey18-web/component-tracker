@@ -301,6 +301,7 @@ struct MainView: View {
             }
         }
         .overlay(Rectangle().strokeBorder(Palette.line, lineWidth: Metrics.rule))
+        .frame(width: 53, height: 21)  // 26 + 1 + 26 = 53; prevents HStack stretch
     }
 
     private func iconToggle(isOn: Bool, icon: String, help: String, action: @escaping () -> Void) -> some View {
@@ -313,6 +314,7 @@ struct MainView: View {
         }
         .buttonStyle(.plain)
         .help(help)
+        .frame(width: 26, height: 21)   // pin the button itself, not just its label
     }
 
     @ViewBuilder
