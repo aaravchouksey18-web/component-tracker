@@ -104,7 +104,15 @@ INK_OK=0
 # purpose and require the probe to notice. A probe never seen failing is not
 # evidence, and this one had two false passes before this line existed.
 cp "$HERE/Sources/Design.swift" "$HERE/build/Design.probe.bak"
-trap 'cp "$HERE/build/Design.probe.bak" "$HERE/Sources/Design.swift" 2>/dev/null' EXIT
+# The trap restores the file if this script is interrupted between breaking the
+# scale and putting it back, so a Ctrl-C cannot leave a sabotaged Design.swift
+# on disk. It is cleared once the restore is done, and that matters more than it
+# looks: a trap on EXIT runs *after* the explicit `exit`, and `exit` does not
+# protect `$?` from the trap's own commands. With the backup already removed,
+# the trap's `cp` failed and its status became the script's — so a run that
+# passed every check still exited 1. `trap - EXIT` before the verdict, so the
+# cleanup can never be what decides whether the render passed.
+trap 'cp "$HERE/build/Design.probe.bak" "$HERE/Sources/Design.swift" 2>/dev/null || true' EXIT
 python3 - "$HERE/Sources/Design.swift" <<'PY'
 import sys
 p = sys.argv[1]
@@ -138,5 +146,21 @@ else
 fi
 cp "$HERE/build/Design.probe.bak" "$HERE/Sources/Design.swift"
 rm -f "$HERE/build/Design.probe.bak" "$HERE/build/InkBands.broken"
+
+# Disarm the restore trap now that the file is back. Leaving it armed means it
+# runs after the `exit` below, when the backup it copies from no longer exists,
+# and the `cp`'s failure becomes the script's exit status — a run that passed
+# every check reported failure. Disarming here means the cleanup is a fact that
+# already happened, not a step that runs last and gets the last word.
+trap - EXIT
+
+# And if the restore itself failed, that is not a pass. A sabotaged Design.swift
+# left on disk would be found by the next build, but a script that says "clean"
+# while the source is broken is worse than one that stops.
+if ! grep -q "case .display: return k.figureSize" "$HERE/Sources/Design.swift"; then
+  echo "RESTORE FAILED — Sources/Design.swift did not come back intact."
+  echo "  Restore it from git: git checkout -- Sources/Design.swift"
+  exit 1
+fi
 
 if [ $PROBE_OK -eq 0 ] && [ $INK_OK -eq 0 ]; then exit 0; else exit 1; fi
