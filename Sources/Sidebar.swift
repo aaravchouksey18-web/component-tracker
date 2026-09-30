@@ -208,7 +208,9 @@ struct ThemeSwitcher: View {
                 .padding(.bottom, 5)
 
             SkinPicker()
-            SchemePair()
+            // Same fixed width as Settings so the two halves are square-ish,
+            // not 210pt-wide oblongs.
+            SchemePair(fixedWidth: 84)
                 .padding(.horizontal, Metrics.pad)
                 .padding(.top, 8)
         }
