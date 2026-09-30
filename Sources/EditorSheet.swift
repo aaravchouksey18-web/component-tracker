@@ -74,19 +74,19 @@ struct ComponentEditor: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(isNew ? "New Component" : "Edit Component")
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .font(.mono(.title, .bold))
                     .tracking(0.9)
                     .foregroundStyle(Palette.textHi)
                 Text(isNew ? "Fill in what you know — everything is optional"
                            : (component?.partNumber.isEmpty == false ? component!.partNumber : "Untitled"))
-                    .font(.mono(10))
+                    .font(.mono(.small))
                     .foregroundStyle(Palette.textLow)
                     .lineLimit(1)
             }
             Spacer()
             Button { dismiss() } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.ui(.body, .semibold))
                     .foregroundStyle(Palette.textMid)
             }
             .buttonStyle(.plain)
@@ -104,7 +104,7 @@ struct ComponentEditor: View {
             Spacer()
             if rapid {
                 Text("⌘↩ add · ⌘⇧↩ add another")
-                    .font(.ui(10))
+                    .font(.ui(.small))
                     .foregroundStyle(Palette.textLow)
             }
             GhostButton(title: "Cancel") { dismiss() }
@@ -180,9 +180,9 @@ struct ComponentEditor: View {
             if ui.draft.isLowStock || ui.draft.isOutOfStock {
                 HStack(spacing: 7) {
                     Image(systemName: ui.draft.isOutOfStock ? "xmark.octagon.fill" : "exclamationmark.triangle.fill")
-                        .font(.system(size: 10))
+                        .font(.ui(.small))
                     Text(ui.draft.isOutOfStock ? "Out of stock." : "At or below the minimum of \(ui.draft.minimumStock).")
-                        .font(.ui(11))
+                        .font(.ui(.body))
                 }
                 .foregroundStyle(ui.draft.isOutOfStock ? Palette.danger : Palette.warn)
                 .padding(.horizontal, 10).padding(.vertical, 7)
@@ -239,7 +239,7 @@ struct ComponentEditor: View {
             HStack(spacing: 12) {
                 LabeledField("Unit cost (\(Money.symbol))") {
                     HStack(spacing: 4) {
-                        Text(Money.symbol).font(.mono(12)).foregroundStyle(Palette.textLow)
+                        Text(Money.symbol).font(.mono(.title)).foregroundStyle(Palette.textLow)
                         TextField("0.00", value: $ui.draft.unitCost, format: .number.precision(.fractionLength(0...4)))
                             .monoField()
                             .onChange(of: ui.draft.unitCost) { _, _ in
@@ -290,11 +290,11 @@ struct ComponentEditor: View {
     private func duplicateNotice(_ dup: Component) -> some View {
         HStack(alignment: .top, spacing: 7) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 9))
+                .font(.ui(.label))
                 .padding(.top, 1)
             VStack(alignment: .leading, spacing: 3) {
                 Text("Already in your inventory — \(dup.quantity) in stock")
-                    .font(.ui(10, .medium))
+                    .font(.ui(.small, .medium))
                 Button("Edit that one instead") {
                     // Nothing typed here is worth keeping, so the partially
                     // filled draft is dropped rather than merged into the
@@ -303,7 +303,7 @@ struct ComponentEditor: View {
                     dismiss()
                 }
                 .buttonStyle(.plain)
-                .font(.ui(10))
+                .font(.ui(.small))
                 .foregroundStyle(Palette.accent)
             }
         }
@@ -331,30 +331,30 @@ struct ComponentEditor: View {
                 Spacer()
                 if net != 0 {
                     Text("\(net) net used")
-                        .font(.mono(10))
+                        .font(.mono(.small))
                         .foregroundStyle(Palette.textMid)
                 }
             }
 
             if entries.isEmpty {
                 Text("Nothing taken out of this part yet.")
-                    .font(.ui(10))
+                    .font(.ui(.small))
                     .foregroundStyle(Palette.textLow)
             } else {
                 VStack(spacing: 0) {
                     ForEach(entries.prefix(5)) { e in
                         HStack(spacing: 9) {
                             Text(e.kind == .used ? "−\(e.quantity)" : "+\(e.quantity)")
-                                .font(.mono(11, .semibold))
+                                .font(.mono(.body, .semibold))
                                 .foregroundStyle(e.kind == .used ? Palette.textHi : Palette.good)
                                 .frame(width: 42, alignment: .trailing)
                             Text(e.project.isEmpty ? "No project" : e.project)
-                                .font(.ui(10))
+                                .font(.ui(.small))
                                 .foregroundStyle(e.project.isEmpty ? Palette.textLow : Palette.textMid)
                                 .lineLimit(1)
                             Spacer(minLength: 6)
                             Text(HistoryView.dayStamp(e.date))
-                                .font(.mono(10))
+                                .font(.mono(.small))
                                 .foregroundStyle(Palette.textLow)
                         }
                         .padding(.vertical, 6)
@@ -366,7 +366,7 @@ struct ComponentEditor: View {
                 }
                 if entries.count > 5 {
                     Text("and \(entries.count - 5) more — see Usage History in the sidebar")
-                        .font(.ui(10))
+                        .font(.ui(.small))
                         .foregroundStyle(Palette.textLow)
                         .padding(.top, 2)
                 }
@@ -448,7 +448,7 @@ struct LabeledField<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
-                .font(.ui(10, .medium))
+                .font(.ui(.small, .medium))
                 .foregroundStyle(Palette.textMid)
             content
         }
@@ -471,7 +471,7 @@ struct ToggleRow<Content: View>: View {
         HStack(spacing: 10) {
             Toggle("", isOn: $isOn).labelsHidden().toggleStyle(.switch).controlSize(.mini)
             Text(title)
-                .font(.ui(11, .medium))
+                .font(.ui(.body, .medium))
                 .foregroundStyle(Palette.textMid)
                 .frame(width: 60, alignment: .leading)
             trailing
@@ -496,7 +496,7 @@ struct StepperField: View {
 
     private func stepIcon(_ i: String) -> some View {
         Image(systemName: i)
-            .font(.system(size: 9, weight: .bold))
+            .font(.ui(.label, .bold))
             .foregroundStyle(Palette.textMid)
             .frame(width: 18, height: 18)
             .overlay(Rectangle().strokeBorder(Palette.line, lineWidth: Metrics.rule))
@@ -510,7 +510,7 @@ extension View {
     /// *on* the background rather than in a raised block, which is how a text
     /// entry behaves in a terminal: nothing to click, just a caret and a rule.
     func plainField() -> some View {
-        self.font(.ui(12))
+        self.font(.ui(.title))
             .foregroundStyle(Palette.textHi)
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
@@ -519,7 +519,7 @@ extension View {
     }
 
     func monoField() -> some View {
-        self.font(.mono(12))
+        self.font(.mono(.title))
             .foregroundStyle(Palette.textHi)
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
@@ -542,16 +542,16 @@ struct TakeOutSheet: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Take Out")
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .font(.mono(.title, .bold))
                     .tracking(0.9)
                         .foregroundStyle(Palette.textHi)
                     Text(component.partNumber.isEmpty ? component.name : component.partNumber)
-                        .font(.mono(10))
+                        .font(.mono(.small))
                         .foregroundStyle(Palette.textLow)
                 }
                 Spacer()
                 Text("[\(component.quantity) ON HAND]")
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .font(.mono(.small, .medium))
                     .tracking(0.5)
                     .foregroundStyle(Palette.textMid)
             }
@@ -566,7 +566,7 @@ struct TakeOutSheet: View {
                     }
                     LabeledField("Remaining after") {
                         Text("\(max(0, component.quantity - ui.count))")
-                            .font(.mono(14, .medium))
+                            .font(.mono(.heading, .medium))
                             .foregroundStyle(component.quantity - ui.count <= (component.minimumStock > 0 ? component.minimumStock : 0)
                                              ? Palette.warn : Palette.textHi)
                             .padding(.vertical, 7)
@@ -599,12 +599,12 @@ struct TakeOutSheet: View {
 
                 if component.quantity - ui.count <= 0 {
                     Label("This will leave the part out of stock.", systemImage: "xmark.octagon.fill")
-                        .font(.ui(11))
+                        .font(.ui(.body))
                         .foregroundStyle(Palette.danger)
                 } else if component.minimumStock > 0 && component.quantity - ui.count <= component.minimumStock {
                     Label("This drops below the minimum of \(component.minimumStock).",
                           systemImage: "exclamationmark.triangle.fill")
-                        .font(.ui(11))
+                        .font(.ui(.body))
                         .foregroundStyle(Palette.warn)
                 }
             }

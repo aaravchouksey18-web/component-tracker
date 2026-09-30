@@ -78,13 +78,13 @@ struct HistoryView: View {
         HStack(alignment: .bottom, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Usage History")
-                    .font(.system(size: 13, weight: .bold, design: .monospaced))
+                    .font(.mono(.heading, .bold))
                     .tracking(1.0)
                     .foregroundStyle(Palette.textHi)
                 Text(store.consumed.isEmpty
                      ? "Nothing logged yet"
                      : "\(store.consumed.count) entr\(store.consumed.count == 1 ? "y" : "ies") · \(store.totalConsumed) net unit\(store.totalConsumed == 1 ? "" : "s") used")
-                    .font(.ui(11))
+                    .font(.ui(.body))
                     .foregroundStyle(Palette.textLow)
             }
             Spacer(minLength: 8)
@@ -126,7 +126,7 @@ struct HistoryView: View {
                 ForEach(rows, id: \.project) { row in
                     HStack(spacing: 10) {
                         Text(row.project)
-                            .font(.ui(11))
+                            .font(.ui(.body))
                             .foregroundStyle(row.project == "Unassigned" ? Palette.textLow : Palette.textHi)
                             .frame(width: 130, alignment: .leading)
                             .lineLimit(1)
@@ -146,11 +146,11 @@ struct HistoryView: View {
                         // Gross take-outs, with returns shown separately so the
                         // figure is never negative and never misleading.
                         Text("\(row.used)")
-                            .font(.mono(11, .medium))
+                            .font(.mono(.body, .medium))
                             .foregroundStyle(Palette.textMid)
                             .frame(width: 46, alignment: .trailing)
                         Text(row.returned > 0 ? "−\(row.returned) back" : "")
-                            .font(.mono(9))
+                            .font(.mono(.label))
                             .foregroundStyle(Palette.good)
                             .frame(width: 58, alignment: .leading)
                     }
@@ -174,7 +174,7 @@ struct HistoryView: View {
                 SectionLabel(focusComponentID == nil ? "All entries" : "This part only")
                 Spacer()
                 Text("\(entries.count)")
-                    .font(.mono(10))
+                    .font(.mono(.small))
                     .foregroundStyle(Palette.textLow)
             }
 
@@ -198,31 +198,31 @@ struct HistoryView: View {
             // Sign column. Returns are the exception, so they read green and
             // carry a +; a take-out is the normal case and reads plain.
             Text(e.kind == .used ? "−\(e.quantity)" : "+\(e.quantity)")
-                .font(.mono(12, .semibold))
+                .font(.mono(.title, .semibold))
                 .foregroundStyle(e.kind == .used ? Palette.textHi : Palette.good)
                 .frame(width: 46, alignment: .trailing)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(e.displayPart)
-                    .font(.mono(11, .medium))
+                    .font(.mono(.body, .medium))
                     .foregroundStyle(stillThere ? Palette.textHi : Palette.textMid)
                     .lineLimit(1)
                 HStack(spacing: 5) {
                     Text(stamp(e.date))
-                        .font(.mono(10))
+                        .font(.mono(.small))
                         .foregroundStyle(Palette.textLow)
                     if !e.subtitle.isEmpty {
                         Text("·")
-                            .font(.mono(10))
+                            .font(.mono(.small))
                             .foregroundStyle(Palette.textLow)
                         Text(e.subtitle)
-                            .font(.ui(10))
+                            .font(.ui(.small))
                             .foregroundStyle(Palette.textLow)
                             .lineLimit(1)
                     }
                     if !stillThere {
                         Text("· deleted")
-                            .font(.ui(10))
+                            .font(.ui(.small))
                             .foregroundStyle(Palette.warn)
                     }
                 }
@@ -237,19 +237,19 @@ struct HistoryView: View {
             // a single row's "after" is just today's stock count.
             if !stillThere || !hasEarlierEntry(for: e) {
                 Text("—")
-                    .font(.mono(10))
+                    .font(.mono(.small))
                     .foregroundStyle(Palette.textLow)
                     .help(stillThere ? "No earlier entry to compare" : "Part deleted")
             } else {
                 Text("\(e.resultingStock) left")
-                    .font(.mono(10))
+                    .font(.mono(.small))
                     .foregroundStyle(e.resultingStock <= 0 ? Palette.danger : Palette.textLow)
             }
 
             if stillThere {
                 Button { onOpenPart(e.componentID) } label: {
                     Image(systemName: "arrow.up.left")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.ui(.label, .bold))
                         .foregroundStyle(Palette.textMid)
                 }
                 .buttonStyle(.plain)

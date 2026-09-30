@@ -229,11 +229,11 @@ struct MainView: View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(titleText.uppercased())
-                    .font(.ui(SkinController.skin.bodySize + 2, .bold))
+                    .font(.ui(.heading, .bold))
                     .tracking(SkinController.skin.labelTracking)
                     .foregroundStyle(Palette.textHi)
                 Text("\(store.filtered.count) of \(store.components.count) component\(store.components.count == 1 ? "" : "s")")
-                    .font(.ui(SkinController.skin.labelSize + 1))
+                    .font(.ui(.small))
                     .foregroundStyle(Palette.textLow)
             }
 
@@ -242,7 +242,7 @@ struct MainView: View {
             if !ui.selection.isEmpty {
                 HStack(spacing: 8) {
                     Text("\(ui.selection.count) selected")
-                        .font(.mono(11))
+                        .font(.mono(.body))
                         .foregroundStyle(Palette.textMid)
                     GhostButton(title: "Take Out", systemImage: "minus.circle") {
                         if let first = store.filtered.first(where: { ui.selection.contains($0.id) }) {
@@ -262,10 +262,10 @@ struct MainView: View {
                     } label: {
                         HStack(spacing: 4) {
                             Text(cat.uppercased())
-                                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                                .font(.mono(.label, .semibold))
                                 .tracking(0.5)
                             Text("×")
-                                .font(.mono(10, .bold))
+                                .font(.mono(.small, .bold))
                         }
                         .foregroundStyle(Palette.textMid)
                         .padding(.horizontal, 6).padding(.vertical, 3)
@@ -306,7 +306,7 @@ struct MainView: View {
     private func iconToggle(isOn: Bool, icon: String, help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 11, weight: .medium))
+                .font(.ui(.body, .medium))
                 .foregroundStyle(isOn ? Palette.bg : Palette.textMid)
                 .frame(width: 26, height: 21)
                 .background(isOn ? Palette.accent : Color.clear)
@@ -400,17 +400,17 @@ struct SearchField: View {
     var body: some View {
         HStack(spacing: 6) {
             Text("/")
-                .font(.mono(12, .bold))
+                .font(.mono(.title, .bold))
                 .foregroundStyle(focused ? Palette.accent : Palette.textLow)
             TextField("search", text: $text)
                 .textFieldStyle(.plain)
-                .font(.ui(11))
+                .font(.ui(.body))
                 .foregroundStyle(Palette.textHi)
                 .focused($focused)
             if !text.isEmpty {
                 Button { text = "" } label: {
                     Text("esc")
-                        .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                        .font(.mono(.micro, .semibold))
                         .tracking(0.4)
                         .foregroundStyle(Palette.textLow)
                 }

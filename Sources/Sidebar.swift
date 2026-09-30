@@ -74,15 +74,15 @@ struct Sidebar: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text("component-tracker")
-                .font(.ui(12, .bold))
+                .font(.ui(.title, .bold))
                 .tracking(0.8)
                 .foregroundStyle(Palette.textHi)
             HStack(spacing: 5) {
                 Text(SkinController.skin.id == "swiss" ? "—" : "$")
-                    .font(.mono(10, .bold))
+                    .font(.mono(.small, .bold))
                     .foregroundStyle(Palette.accent)
                 Text("\(store.totalUnits) units on hand")
-                    .font(.mono(10))
+                    .font(.mono(.small))
                     .foregroundStyle(Palette.textLow)
             }
         }
@@ -118,22 +118,22 @@ struct SidebarRow: View {
                 // The prompt. Reserve the slot on every row so labels stay in
                 // one column whether or not anything is selected.
                 Text("›")
-                    .font(.mono(11, .bold))
+                    .font(.mono(.body, .bold))
                     .foregroundStyle(active ? Palette.bg : .clear)
                     .frame(width: 12)
                 Image(systemName: section.icon)
-                    .font(.system(size: 11, weight: .regular))
+                    .font(.ui(.body, .regular))
                     .foregroundStyle(active ? Palette.bg : Palette.textLow)
                     .frame(width: 18)
                 Text(section.label)
-                    .font(.ui(11, active ? .bold : .regular))
+                    .font(.ui(.body, active ? .bold : .regular))
                     .foregroundStyle(active ? Palette.bg : Palette.textMid)
                     .lineLimit(1)
                 Spacer(minLength: 6)
                 if let badge {
                     // Bracketed count — the terminal's stand-in for a badge.
                     Text("[\(badge)]")
-                        .font(.mono(10, .semibold))
+                        .font(.mono(.small, .semibold))
                         .foregroundStyle(active ? Palette.bg : badgeTint)
                 }
             }
@@ -157,7 +157,7 @@ struct CategoryRow: View {
         Button(action: action) {
             HStack(spacing: 0) {
                 Text("›")
-                    .font(.mono(11, .bold))
+                    .font(.mono(.body, .bold))
                     .foregroundStyle(active ? Palette.bg : .clear)
                     .frame(width: 12)
                 // A 4pt block in the category colour, not a dot. Square
@@ -167,13 +167,13 @@ struct CategoryRow: View {
                     .frame(width: 4, height: 9)
                     .opacity(active ? 1 : 0.65)
                 Text(name)
-                    .font(.ui(10, active ? .bold : .regular))
+                    .font(.ui(.small, active ? .bold : .regular))
                     .foregroundStyle(active ? Palette.bg : Palette.textMid)
                     .lineLimit(1)
                     .padding(.leading, 6)
                 Spacer(minLength: 6)
                 Text("\(count)")
-                    .font(.mono(10))
+                    .font(.mono(.small))
                     .foregroundStyle(active ? Palette.bg : Palette.textLow)
             }
             .padding(.horizontal, Metrics.pad)
@@ -227,12 +227,12 @@ struct PiStatusBar: View {
                 .fill(pi.config.enabled ? Palette.good : Palette.textLow)
                 .frame(width: 5, height: 5)
             Text(pi.config.enabled ? "PI SYNC" : "PI SYNC OFF")
-                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .font(.mono(.label, .semibold))
                 .tracking(0.5)
                 .foregroundStyle(pi.config.enabled ? Palette.good : Palette.textLow)
             if pi.config.enabled {
                 Text(pi.config.displayString)
-                    .font(.mono(9))
+                    .font(.mono(.label))
                     .foregroundStyle(Palette.textLow)
                     .lineLimit(1)
                     .truncationMode(.head)

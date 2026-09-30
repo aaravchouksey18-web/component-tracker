@@ -57,11 +57,11 @@ struct DashboardView: View {
     var header: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text("COMPONENTTRACKER \(store.totalUnits) UNITS ON HAND")
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .font(.mono(.title, .bold))
                 .tracking(0.8)
                 .foregroundStyle(Palette.textHi)
             Text(store.lastSaved.map { "Saved \(relative($0))" } ?? "Not saved yet")
-                .font(.mono(10))
+                .font(.mono(.small))
                 .foregroundStyle(Palette.textLow)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -83,7 +83,7 @@ struct DashboardView: View {
                     // just the shape.
                     .annotation(position: .trailing) {
                         Text("\(unitsIn(name))")
-                            .font(.mono(9))
+                            .font(.mono(.label))
                             .foregroundStyle(Palette.textMid)
                     }
                 }
@@ -91,14 +91,14 @@ struct DashboardView: View {
             .chartXAxis {
                 AxisMarks(preset: .aligned, position: .bottom) { _ in
                     AxisValueLabel()
-                        .font(.mono(9))
+                        .font(.mono(.label))
                         .foregroundStyle(Palette.textLow)
                 }
             }
             .chartYAxis {
                 AxisMarks(position: .leading) { _ in
                     AxisValueLabel()
-                        .font(.mono(10))
+                        .font(.mono(.small))
                         .foregroundStyle(Palette.textMid)
                 }
             }
@@ -114,7 +114,7 @@ struct DashboardView: View {
                 SectionLabel("Needs reordering")
                 Spacer(minLength: 8)
                 Text("\(store.lowStockComponents.count) ITEM\(store.lowStockComponents.count == 1 ? "" : "S")")
-                    .font(.mono(10))
+                    .font(.mono(.small))
                     .foregroundStyle(Palette.textLow)
             }
 
@@ -124,22 +124,22 @@ struct DashboardView: View {
                         StockDot(level: c.stockLevel)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(c.partNumber.isEmpty ? c.name : c.partNumber)
-                                .font(.mono(11, .semibold))
+                                .font(.mono(.body, .semibold))
                                 .foregroundStyle(Palette.textHi)
                                 .lineLimit(1)
                             Text([c.name, c.supplier].filter { !$0.isEmpty }.joined(separator: " · "))
-                                .font(.ui(10))
+                                .font(.ui(.small))
                                 .foregroundStyle(Palette.textLow)
                                 .lineLimit(1)
                         }
                         Spacer(minLength: 8)
                         if c.minimumStock > 0 {
                             Text("min \(c.minimumStock)")
-                                .font(.mono(9))
+                                .font(.mono(.label))
                                 .foregroundStyle(Palette.textLow)
                         }
                         Text("\(c.quantity)")
-                            .font(.mono(12, .bold))
+                            .font(.mono(.title, .bold))
                             .foregroundStyle(c.stockLevel == .out ? Palette.danger : Palette.warn)
                             .frame(width: 34, alignment: .trailing)
                         Pill(text: c.category, tint: swiftUIColor(for: c.category))

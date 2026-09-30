@@ -21,7 +21,7 @@ struct ComponentTable: View {
 
             TableColumn("PART NO.", sortUsing: KeyPathComparator(\.partNumber)) { c in
                 Text(c.partNumber.isEmpty ? "—" : c.partNumber)
-                    .font(.mono(12, .medium))
+                    .font(.mono(.title, .medium))
                     .foregroundStyle(c.partNumber.isEmpty ? Palette.textLow : Palette.textHi)
                     .lineLimit(1)
             }
@@ -30,12 +30,12 @@ struct ComponentTable: View {
             TableColumn("DESCRIPTION", sortUsing: KeyPathComparator(\.name)) { c in
                 VStack(alignment: .leading, spacing: 1) {
                     Text(c.name.isEmpty ? "Unnamed" : c.name)
-                        .font(.ui(12))
+                        .font(.ui(.title))
                         .foregroundStyle(c.name.isEmpty ? Palette.textLow : Palette.textHi)
                         .lineLimit(1)
                     if !c.value.isEmpty || !c.footprint.isEmpty {
                         Text([c.value, c.footprint].filter { !$0.isEmpty }.joined(separator: " · "))
-                            .font(.mono(10))
+                            .font(.mono(.small))
                             .foregroundStyle(Palette.textLow)
                             .lineLimit(1)
                     }
@@ -53,11 +53,11 @@ struct ComponentTable: View {
                     Spacer(minLength: 0)
                     if c.minimumStock > 0 {
                         Text("/\(c.minimumStock)")
-                            .font(.mono(10))
+                            .font(.mono(.small))
                             .foregroundStyle(Palette.textLow)
                     }
                     Text("\(c.quantity)")
-                        .font(.mono(12, .medium))
+                        .font(.mono(.title, .medium))
                         .foregroundStyle(qtyColor(c))
                 }
             }
@@ -65,7 +65,7 @@ struct ComponentTable: View {
 
             TableColumn("LOCATION", sortUsing: KeyPathComparator(\.location)) { c in
                 Text(c.location.isEmpty ? "—" : c.location)
-                    .font(.mono(11))
+                    .font(.mono(.body))
                     .foregroundStyle(c.location.isEmpty ? Palette.textLow : Palette.textMid)
                     .lineLimit(1)
             }
@@ -73,7 +73,7 @@ struct ComponentTable: View {
 
             TableColumn("VALUE", sortUsing: KeyPathComparator(\.totalValue)) { c in
                 Text(c.unitCost > 0 ? currency(c.totalValue) : "—")
-                    .font(.mono(11))
+                    .font(.mono(.body))
                     .foregroundStyle(Palette.textMid)
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
@@ -185,7 +185,7 @@ struct RowActions: View {
     private func iconBtn(_ icon: String, help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 10, weight: .medium))
+                .font(.ui(.small, .medium))
                 .foregroundStyle(Palette.textMid)
                 .frame(width: 15, height: 15)
                 .contentShape(Rectangle())
@@ -238,11 +238,11 @@ struct ComponentCard: View {
             HStack(alignment: .top, spacing: 8) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(component.partNumber.isEmpty ? "—" : component.partNumber)
-                        .font(.mono(12, .bold))
+                        .font(.mono(.title, .bold))
                         .foregroundStyle(Palette.textHi)
                         .lineLimit(1)
                     Text(component.name.isEmpty ? "Unnamed" : component.name)
-                        .font(.ui(10))
+                        .font(.ui(.small))
                         .foregroundStyle(Palette.textMid)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
@@ -276,11 +276,11 @@ struct ComponentCard: View {
                     SectionLabel("In stock")
                     HStack(spacing: 3) {
                         Text("\(component.quantity)")
-                            .font(.mono(17, .medium))
+                            .font(.mono(.figure, .medium))
                             .foregroundStyle(qtyColor)
                         if component.minimumStock > 0 {
                             Text("min \(component.minimumStock)")
-                                .font(.mono(9))
+                                .font(.mono(.label))
                                 .foregroundStyle(Palette.textLow)
                         }
                     }
@@ -290,7 +290,7 @@ struct ComponentCard: View {
                     VStack(alignment: .trailing, spacing: 1) {
                         SectionLabel("Value")
                         Text(Money.exact(component.totalValue))
-                            .font(.mono(12, .medium))
+                            .font(.mono(.title, .medium))
                             .foregroundStyle(Palette.textMid)
                     }
                 }
@@ -319,7 +319,7 @@ struct ComponentCard: View {
         VStack(alignment: .leading, spacing: 1) {
             SectionLabel(label)
             Text(value)
-                .font(mono ? .mono(11) : .ui(11))
+                .font(mono ? .mono(.body) : .ui(.body))
                 .foregroundStyle(Palette.textMid)
                 .lineLimit(1)
         }

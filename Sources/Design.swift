@@ -146,7 +146,10 @@ struct Skin {
             raised:   Color(hex: 0x141414), rule:    Color(hex: 0xE8E8E8),
             ruleSoft: Color(hex: 0x262626),
             textHi:   Color(hex: 0xFAFAFA), textMid: Color(hex: 0x909090),
-            textLow:  Color(hex: 0x5C5C5C),
+            // 3.66:1 on #0A0A0A. Was #5C5C5C at 2.96:1, which cleared a 2.0
+            // floor and not much else — a floor chosen to fit the colour rather
+            // than to make the text readable.
+            textLow:  Color(hex: 0x6A6A6A),
             accent:   Color(hex: 0xFF3B30), good:   Color(hex: 0x4ADE80),
             warn:     Color(hex: 0xFBBF24), danger: Color(hex: 0xFF3B30),
             isDark: true),
@@ -185,7 +188,11 @@ struct Skin {
             raised:   Color(hex: 0xFFFFFF), rule:    Color(hex: 0x2E5C8A),
             ruleSoft: Color(hex: 0xC6D8EA),
             textHi:   Color(hex: 0x0A2540), textMid: Color(hex: 0x3D6B99),
-            textLow:  Color(hex: 0x7FA3C4),
+            // 3.10:1 on the #F4F7FA stock. Was #7FA3C4 at 2.46:1. The same ink
+            // as the dark scheme's `textLow`: one blue for both, so the sheet
+            // and the blueprint are the same drawing in different stock rather
+            // than two drawings that happen to share a layout.
+            textLow:  Color(hex: 0x6B90B8),
             accent:   Color(hex: 0x0A6EB8), good:   Color(hex: 0x0E7C4A),
             warn:     Color(hex: 0x9A6700), danger: Color(hex: 0xB4231C),
             isDark: false),
@@ -299,6 +306,69 @@ enum Metrics {
 /// Uses the system monospaced design rather than a named face on purpose: a
 /// `.custom("Some Family-Bold")` that CoreText cannot resolve falls back
 /// silently and renders in the wrong typeface with no error anywhere.
+// MARK: - Type scale
+
+/// Named type sizes, derived from the skin's three anchors.
+///
+/// This exists because `Skin.figureSize` was declared, described in a commit
+/// message as the thing that gives Swiss its character, tested by comparing it
+/// against another `Skin` field — and then read by nothing. All 117 font sites
+/// in the app passed a literal. So switching skins moved colour, radius, card
+/// treatment and spacing, and left typography untouched: the whole app rendered
+/// in 8–14pt with one 20pt figure, in every skin.
+///
+/// A test comparing two struct fields verifies the *config*. It cannot verify
+/// that anything *renders* at that config, and that gap is how a dead parameter
+/// shipped as a headline feature. `Tests/Tests.swift` now asserts that every
+/// role below is reached by a real call site, not merely that the sizes differ.
+///
+/// Every size is an offset from an anchor, so a skin is tuned in one place and
+/// the whole app moves with it.
+enum Type {
+
+    /// The ladder, with each role's offset from the skin's anchors spelled out
+    /// so the intent is checkable rather than implied.
+    enum Role {
+        /// Hero number on an empty state. `figureSize + 8`.
+        case hero
+        /// Large readout: a stat tile's value, a header total. `figureSize`.
+        case display
+        /// A card's own figure: the stock count. `figureSize - 3`.
+        case figure
+        /// Section heading. `bodySize + 3`.
+        case heading
+        /// Prominent label or card title. `bodySize + 1`.
+        case title
+        /// Running text. `bodySize`.
+        case body
+        /// Secondary text, captions, button labels. `bodySize - 1`.
+        case small
+        /// Field labels, table headers. `labelSize`.
+        case label
+        /// Legal print, badges, smallest text anywhere. `labelSize - 1`.
+        case micro
+    }
+
+    static func size(_ r: Role) -> CGFloat {
+        let k = SkinController.skin
+        switch r {
+        case .hero:    return k.figureSize + 8
+        case .display: return k.figureSize
+        case .figure:  return k.figureSize - 3
+        case .heading: return k.bodySize + 3
+        case .title:   return k.bodySize + 1
+        case .body:    return k.bodySize
+        case .small:   return k.bodySize - 1
+        case .label:   return k.labelSize
+        case .micro:   return max(7, k.labelSize - 1)
+        }
+    }
+
+    /// Every role, for the test that asserts none of them is dead.
+    static let allRoles: [Role] = [.hero, .display, .figure, .heading, .title,
+                                   .body, .small, .label, .micro]
+}
+
 extension Font {
     /// Monospaced, unconditionally. Used for figures, codes, part numbers and
     /// paths — the places where alignment is load-bearing.
@@ -311,6 +381,17 @@ extension Font {
     /// alignment convention.
     static func ui(_ size: CGFloat, _ w: Font.Weight = .regular) -> Font {
         .system(size: size, weight: w, design: SkinController.skin.monospaced ? .monospaced : .default)
+    }
+
+    /// Monospaced at a named size, for figures, codes and part numbers.
+    static func mono(_ role: Type.Role, _ w: Font.Weight = .regular) -> Font {
+        .system(size: Type.size(role), weight: w, design: .monospaced)
+    }
+
+    /// Proportional (or monospaced, if the skin says so) at a named size.
+    static func ui(_ role: Type.Role, _ w: Font.Weight = .regular) -> Font {
+        .system(size: Type.size(role), weight: w,
+                design: SkinController.skin.monospaced ? .monospaced : .default)
     }
 
     /// The field label: small, bold, tracked caps. Tracking width is the skin's,
@@ -529,10 +610,10 @@ struct SkinRow: View {
                 SkinSwatch(skin: skin)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(skin.name)
-                        .font(.ui(SkinController.skin.bodySize, active ? .bold : .regular))
+                        .font(.ui(.body, active ? .bold : .regular))
                         .foregroundStyle(active ? Palette.accent : Palette.textHi)
                     Text(skin.blurb)
-                        .font(.ui(SkinController.skin.labelSize))
+                        .font(.ui(.label))
                         .foregroundStyle(Palette.textLow)
                         .lineLimit(1)
                 }
@@ -541,7 +622,7 @@ struct SkinRow: View {
                 // swatch's own neighbourhood and destroy the preview it exists
                 // to provide.
                 Text(active ? "\u{2713}" : "")
-                    .font(.ui(SkinController.skin.bodySize, .bold))
+                    .font(.ui(.body, .bold))
                     .foregroundStyle(Palette.accent)
             }
             .padding(.horizontal, Metrics.pad)
@@ -618,10 +699,10 @@ struct GhostButton: View {
         Button(action: action) {
             HStack(spacing: 5) {
                 if let systemImage {
-                    Image(systemName: systemImage).font(.system(size: 10, weight: .medium))
+                    Image(systemName: systemImage).font(.ui(.small, .medium))
                 }
                 Text(title.uppercased())
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .font(.mono(.small, .semibold))
                     .tracking(0.6)
             }
             .foregroundStyle(prominent ? Palette.bg : Palette.textHi)
@@ -672,7 +753,7 @@ struct Pill: View {
     var body: some View {
         let c = tint ?? Palette.textMid
         Text(text.uppercased())
-            .font(.system(size: 9, weight: .medium, design: .monospaced))
+            .font(.mono(.label, .medium))
             .tracking(0.5)
             .foregroundStyle(filled ? Palette.bg : c)
             .lineLimit(1)
@@ -698,14 +779,14 @@ struct StatTile: View {
         VStack(alignment: .leading, spacing: 5) {
             SectionLabel(label)
             Text(value)
-                .font(.mono(20, .medium))
+                .font(.mono(.display, .medium))
                 .foregroundStyle(tint ?? Palette.textHi)
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
             Rule(weight: Palette.lineSoft)
             if let sub {
                 Text(sub.uppercased())
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(.mono(.label))
                     .tracking(0.5)
                     .foregroundStyle(Palette.textLow)
                     .lineLimit(1)
@@ -724,14 +805,14 @@ struct EmptyStateView: View {
     var body: some View {
         VStack(spacing: 10) {
             Image(systemName: systemImage)
-                .font(.system(size: 28, weight: .light))
+                .font(.ui(.hero, .light))
                 .foregroundStyle(Palette.textLow)
             Text(title.uppercased())
-                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .font(.mono(.title, .semibold))
                 .tracking(1.0)
                 .foregroundStyle(Palette.textHi)
             Text(message)
-                .font(.system(size: 11, design: .monospaced))
+                .font(.mono(.body))
                 .foregroundStyle(Palette.textMid)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)

@@ -15,13 +15,13 @@ struct SettingsSheet: View {
         VStack(spacing: 0) {
             HStack {
                 Text("Settings")
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .font(.mono(.title, .bold))
                     .tracking(0.9)
                     .foregroundStyle(Palette.textHi)
                 Spacer()
                 Button { dismiss() } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.ui(.body, .semibold))
                         .foregroundStyle(Palette.textMid)
                 }
                 .buttonStyle(.plain)
@@ -65,7 +65,7 @@ struct SettingsSheet: View {
 
             Text("\(store.skin.name) · \(store.darkMode ? "dark" : "light") — "
                  + Skin.named(store.skinID).blurb)
-                .font(.ui(SkinController.skin.labelSize + 1))
+                .font(.ui(.small))
                 .foregroundStyle(Palette.textLow)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 6)
@@ -76,7 +76,7 @@ struct SettingsSheet: View {
         FieldGroup("Raspberry Pi backup") {
             Toggle("Enable Pi sync", isOn: $pi.config.enabled)
                 .toggleStyle(.switch).controlSize(.small)
-                .font(.ui(12))
+                .font(.ui(.title))
                 .foregroundStyle(Palette.textHi)
 
             HStack(spacing: 12) {
@@ -136,9 +136,9 @@ struct SettingsSheet: View {
             if let r = pi.lastResult {
                 HStack(alignment: .top, spacing: 7) {
                     Image(systemName: r.isSuccess ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                        .font(.system(size: 10))
+                        .font(.ui(.small))
                     Text(message(r))
-                        .font(.ui(11))
+                        .font(.ui(.body))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .foregroundStyle(tone(r))
@@ -152,7 +152,7 @@ struct SettingsSheet: View {
 
             if let v = pi.lastVerified {
                 Text("Last push verified — \(PiSyncController.byteText(v.bytes)), sha256 \(v.sha)…")
-                    .font(.ui(10))
+                    .font(.ui(.small))
                     .foregroundStyle(Palette.textLow)
             }
 
@@ -166,7 +166,7 @@ struct SettingsSheet: View {
                                 if v > 1000 { pi.config.keepSnapshots = 1000 }
                             }
                         Text("0 = all")
-                            .font(.ui(10))
+                            .font(.ui(.small))
                             .foregroundStyle(Palette.textLow)
                     }
                 }
@@ -175,13 +175,13 @@ struct SettingsSheet: View {
 
             if let d = pi.lastSyncDate {
                 Text("Last backup \(d.formatted(date: .abbreviated, time: .shortened))")
-                    .font(.ui(10))
+                    .font(.ui(.small))
                     .foregroundStyle(Palette.textLow)
             }
             
             // Security note
             Text("Security: SSH host keys must be pre-accepted. Run `ssh-keyscan -H <host> >> ~/.ssh/known_hosts` on first use.")
-                .font(.ui(9))
+                .font(.ui(.label))
                 .foregroundStyle(Palette.textLow)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -191,13 +191,13 @@ struct SettingsSheet: View {
         FieldGroup("Data") {
             VStack(alignment: .leading, spacing: 5) {
                 Text(InventoryStore.inventoryFile.path)
-                    .font(.mono(10))
+                    .font(.mono(.small))
                     .foregroundStyle(Palette.textMid)
                     .textSelection(.enabled)
                     .lineLimit(3)
                     .truncationMode(.middle)
                 Text("Every change is written to this file automatically. Use “Save Snapshot…” or the Pi backup for off-Mac copies — this file is personal data and is never part of the app's repository.")
-                    .font(.ui(10))
+                    .font(.ui(.small))
                     .foregroundStyle(Palette.textLow)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -219,7 +219,7 @@ struct SettingsSheet: View {
                 Spacer(minLength: 0)
             }
             Text("Fills the app with 10 example parts so you can see how everything works. Settings ▸ Data ▸ Delete All clears them.")
-                .font(.ui(10))
+                .font(.ui(.small))
                 .foregroundStyle(Palette.textLow)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -279,13 +279,13 @@ struct ExportSheet: View {
         VStack(spacing: 0) {
             HStack {
                 Text("Export / Import")
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .font(.mono(.title, .bold))
                     .tracking(0.9)
                     .foregroundStyle(Palette.textHi)
                 Spacer()
                 Button { dismiss() } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.ui(.body, .semibold))
                         .foregroundStyle(Palette.textMid)
                 }
                 .buttonStyle(.plain)
@@ -307,8 +307,8 @@ struct ExportSheet: View {
                 Divider().overlay(Palette.line)
                 HStack(spacing: 7) {
                     Image(systemName: ui.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-                        .font(.system(size: 10))
-                    Text(status).font(.ui(11))
+                        .font(.ui(.small))
+                    Text(status).font(.ui(.body))
                 }
                 .foregroundStyle(ui.isError ? Palette.warn : Palette.good)
                 .padding(.horizontal, Metrics.pad).padding(.bottom, 12)
@@ -356,7 +356,7 @@ struct ExportSheet: View {
                 Text("Replace — discard existing and use the file").tag(false)
             }
             .pickerStyle(.radioGroup)
-            .font(.ui(11))
+            .font(.ui(.body))
             .foregroundStyle(Palette.textMid)
             .controlSize(.small)
 
@@ -366,7 +366,7 @@ struct ExportSheet: View {
             }
 
             Text("Merge adds quantities when the part number already exists, and ignores rows with no part number or name.")
-                .font(.ui(10))
+                .font(.ui(.small))
                 .foregroundStyle(Palette.textLow)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -376,16 +376,16 @@ struct ExportSheet: View {
         Button(action: action) {
             HStack(spacing: 11) {
                 Image(systemName: icon)
-                    .font(.system(size: 14, weight: .light))
+                    .font(.ui(.heading, .light))
                     .foregroundStyle(Palette.textMid)
                     .frame(width: 22)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.ui(12, .medium)).foregroundStyle(Palette.textHi)
-                    Text(detail).font(.ui(10)).foregroundStyle(Palette.textLow)
+                    Text(title).font(.ui(.title, .medium)).foregroundStyle(Palette.textHi)
+                    Text(detail).font(.ui(.small)).foregroundStyle(Palette.textLow)
                 }
                 Spacer(minLength: 8)
                 Image(systemName: "square.and.arrow.down")
-                    .font(.system(size: 11))
+                    .font(.ui(.body))
                     .foregroundStyle(Palette.textLow)
             }
             .padding(11)

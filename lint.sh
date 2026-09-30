@@ -143,6 +143,12 @@ def check_theme(f, lines):
             if re.search(pat, code):
                 err(f, i, "theme", msg)
 
+# A font constructor and its first argument, so the rule can inspect the size
+# without having to parse the whole call. Balanced parens are not attempted: a
+# font call in this codebase is short, and the window below stops at the first
+# close paren, which is the size argument in every form used.
+FONT_CALL = re.compile(r'\.(?:ui|mono|field)\(\s*([^),]*(?:\([^)]*\))?[^),]*)')
+
 def check_fonts(f, lines):
     """Everything monospaced, everything on the explicit type scale."""
     for i, ln in enumerate(lines, 1):
@@ -162,15 +168,49 @@ def check_fonts(f, lines):
         if "Font.custom(" in code or re.search(r'Font\s*\(\s*(?:name|size)\s*:', code):
             err(f, i, "font", "named font — an unresolvable .custom() falls back silently "
                              "with no error; use .system(design: .monospaced)")
+        # A font size must be a named role, never a number and never a skin
+        # anchor read directly.
+        #
+        # The numeric-literal form of this rule was in place for the whole type
+        # refactor and did not fire once, because there was nothing left to
+        # catch: the 117 literals had already been replaced. It then missed the
+        # four sites that read `SkinController.skin.bodySize` inside a font
+        # constructor, which are equally outside the role system and equally
+        # invisible to a grep for digits. A rule that only knows one spelling of
+        # the thing it forbids is not a rule; both spellings are here now.
+        if FONT_CALL.search(code):
+            arg = FONT_CALL.search(code).group(1)
+            if re.fullmatch(r'\s*SkinController\.skin\.[A-Za-z]+(\s*[+\-]\s*[0-9.]+)?\s*'
+                            r'(,\s*[^)]*)?', arg):
+                err(f, i, "font", "font size reads a skin anchor directly (`"
+                                 + arg.strip() + "`) — use a Type.Role so the size is "
+                                 "named and every skin moves together")
+            elif re.match(r'\s*[0-9]', arg):
+                err(f, i, "font", f"literal font size `{arg.strip()}` — use a Type.Role "
+                                 "so the skin's type scale actually reaches this view")
 
 # ------------------------------------------------- the layout contract
 
 # Which structs count as "shared" is derived, not hand-listed: a `View` struct
 # is shared if two or more *other* files construct it. GhostButton( is built in
 # several views, so a flexible child inside it changes the width negotiation of
-# all of them and the defect surfaces in whichever negotiates hardest. A struct
-# only one file uses cannot do that.
-DECL = re.compile(r'^\s*(?:public\s+|private\s+|fileprivate\s+)?struct\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*([^{]+)\{?')
+# all of them and the defect surfaces in whichever negotiates hardest.
+#
+# The `<...>` clause is load-bearing and was missing. `CardChrome` is declared
+# `struct CardChrome<Content: View>: View {`, and the pattern that only allowed
+# whitespace between the name and the colon did not match it — so the most
+# structurally invasive view in the app, the one that owns a card's entire
+# chrome, was invisible to this rule. The bug it missed was live for a full
+# round of verification: transparent cards in Blueprint, 12 vertical grid lines
+# running through the text, found by eye rather than by the linter that exists
+# to find exactly that.
+#
+# Any regex-based linter has this shape of hole — a declaration form it does not
+# anticipate is not reported, it is *absent*, and absence reads as clean. The
+# count line below prints every struct it found, so a view silently dropping out
+# of the list is at least visible.
+DECL = re.compile(r'^\s*(?:public\s+|private\s+|fileprivate\s+)?struct\s+'
+                  r'([A-Za-z_][A-Za-z0-9_]*)\s*(?:<[^>{]*>)?\s*:\s*([^{]+)\{?')
 
 structs = {}
 for f, src in text.items():
@@ -187,12 +227,82 @@ for f, src in text.items():
 usage = collections.defaultdict(set)
 for f, src in text.items():
     for name in structs:
-        built = len(re.findall(r'\b' + re.escape(name) + r'\s*[({]', src)) - \
-               len(re.findall(r'struct\s+' + re.escape(name) + r'\b', src))
+        built = 0
+        for m in re.finditer(r'\b' + re.escape(name) + r'\s*[({]', src):
+            line_start = src.rfind("\n", 0, m.start()) + 1
+            if re.search(r'struct\s+$', src[line_start:m.start()]):
+                continue          # the declaration, not a call
+            built += 1
         if built > 0:
             usage[name].add(f.name)
 
 shared = {n for n, fs in usage.items() if len(fs) >= 2}
+
+# Which views get the layout contract, derived rather than hand-listed.
+#
+# The original rule checked only views constructed from two or more *files*, and
+# that is the wrong boundary in both directions.
+#
+# Too narrow: `CardChrome` is declared `struct CardChrome<Content: View>: View`
+# and used only from `ComponentListViews.swift`, so it failed the 2-file test and
+# was never checked at all — the declaration form also defeated the struct
+# regex, so it was invisible twice over. It is the view that owns a card's entire
+# chrome, and the bug it shipped (transparent cards, so Blueprint's 24pt field
+# grid ran through the text) was live through a full round of verification.
+#
+# Too broad: checking every view struct produced 58 errors, nearly all of them
+# `Spacer()` inside a root view like `HistoryView` or `ExportSheet`. A root view
+# negotiates its own width and has no parent to negotiate against; a `Spacer` in
+# one is the ordinary way to push two things apart. 58 suppressions would be 58
+# comments nobody reads, which is worse than no rule because it trains you to
+# skip the output.
+#
+# The property that decides the rule is not "is it constructed" but "is it a
+# composable component" — a view whose width is negotiated by a parent that is
+# not visible in its own file. Two ways to be one, both derivable:
+#
+#   - built from two or more files, so no single reader can see every
+#     constraint applied to it, or
+#   - generic over its content, which is a declaration of intent to be
+#     embedded: `struct CardChrome<Content: View>` exists to wrap somebody
+#     else's layout.
+#
+# Everything else — a card, a list, a screen — is a root of its own sub-layout
+# even when a parent technically constructs it. `Spacer()` inside a card's
+# `HStack` is how you push a quantity away from a label; that is the idiom, not
+# a defect. Applying the rule to those produced 58 findings, of which the
+# overwhelming majority were correct code, and 58 suppressions is worse than no
+# rule because it teaches you to skip the output.
+#
+# The generic clause is the actual bug fix. `CardChrome` — the view that owns a
+# card's entire chrome, and the one that shipped transparent cards so the
+# 24pt field grid showed through the text — is generic and built from one file,
+# so it failed both halves of the old test and was never checked. It is now
+# checked, and it is clean.
+constructors = collections.defaultdict(set)   # view name -> files that build it
+for name in structs:
+    for f, src in text.items():
+        for m in re.finditer(r'\b' + re.escape(name) + r'\s*[({]', src):
+            line_start = src.rfind("\n", 0, m.start()) + 1
+            if re.search(r'struct\s+$', src[line_start:m.start()]):
+                continue          # the declaration, not a call
+            # `struct Foo: View` also has to be excluded when the name is a
+            # prefix of another declaration: `ComponentCard` matched
+            # `struct ComponentCardGrid` under a plain `\b`, counted as declared
+            # twice, and was reported as never constructed.
+            constructors[name].add(f)
+            break
+
+def is_generic(name):
+    f, _, _ = structs[name]
+    return re.search(r'struct\s+' + re.escape(name) + r'\s*<', text[f]) is not None
+
+def embedded(name):
+    """True if some other view builds this one — anywhere, in any file."""
+    return bool(constructors.get(name))
+
+checked = shared | {n for n in structs if is_generic(n)}
+roots = sorted(n for n in structs if n not in checked)
 
 # The flexible things. `maxWidth: .infinity` counts because that is how a
 # greedy child is usually spelled; a bare `Spacer()` and `Divider()` are greedy
@@ -209,6 +319,13 @@ FLEX = [
 SHAPE = re.compile(r'\b(Rectangle|Color)\s*\(')
 BOTH_DIMS = re.compile(r'\.frame\s*\([^)]*width[^)]*height', re.S)
 
+def blast(name, user_by):
+    """How this view's internals can hurt, in terms the message can use."""
+    n = len(user_by.get(name, ()))
+    if n >= 2: return f"is built by {n} files"
+    if n == 1: return "is built by one file"
+    return "is a view struct"
+
 def check_contract(name, body, file, base_line, user_by):
     for kind, s, e in stack_bodies(body):
         inner = body[s:e]
@@ -218,7 +335,7 @@ def check_contract(name, body, file, base_line, user_by):
         for pat, label in FLEX:
             if pat.search(inner):
                 err(file, line, "layout",
-                    f"`{name}` is shared by {len(user_by[name])} files and holds {label} "
+                    f"`{name}` {blast(name, user_by)} and holds {label} "
                     f"inside a {kind}. A flexible child here changes width negotiation in "
                     "every view that embeds it. Give it an explicit frame, or mark the line "
                     "`// lint:allow greedy` if the fill is genuinely intended.")
@@ -230,7 +347,7 @@ def check_contract(name, body, file, base_line, user_by):
             chain = tail[:nxt.start()] if nxt else tail
             if "Rectangle" in m.group(0) and not BOTH_DIMS.search(chain):
                 err(file, line, "layout",
-                    f"`{name}` is shared by {len(user_by[name])} files and holds a Rectangle "
+                    f"`{name}` {blast(name, user_by)} and holds a Rectangle "
                     f"with only one axis pinned. In a {kind} it expands to fill the axis you "
                     "did not set. Pin both, or mark the line `// lint:allow greedy`.")
 
@@ -259,16 +376,23 @@ for f, src in text.items():
     check_fonts(f, lines)
     check_radius(f, lines)
 
-for name in sorted(shared):
+for name in sorted(checked):
     f, i, end = structs[name]
     raw = "\n".join(text[f].splitlines()[i:end])
     check_contract(name, strip_strings(raw), f, i + 1, usage)
 
-unused = [n for n in sorted(structs) if n not in shared]
-print(f"lint: {len(structs)} view structs, {len(shared)} shared "
-      f"({', '.join(sorted(shared))})")
-if unused:
-    print(f"lint: {len(unused)} single-file ({', '.join(unused)})")
+# Print the full list, not just the shared subset. A view that quietly drops out
+# of the checked set — because its declaration form changed, or because a
+# rename broke a lookup — is indistinguishable from a view with nothing to
+# complain about, and that is precisely how `CardChrome` went unchecked.
+print(f"lint: {len(structs)} view structs; layout contract on {len(checked)} "
+      f"composable, skipped {len(roots)}")
+print(f"lint: composable ({', '.join(sorted(checked))})")
+if roots:
+    print(f"lint: self-contained, width negotiated in-tree ({', '.join(roots)})")
+generic = sorted(n for n in structs if is_generic(n))
+if generic:
+    print(f"lint: generic ({', '.join(generic)})")
 
 if errors:
     print(f"\n{len(errors)} lint error(s):\n")

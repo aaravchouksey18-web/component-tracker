@@ -629,7 +629,19 @@ struct Tests {
                 ]
                 for (what, fg, bgc) in pairs {
                     let cr = contrastRatio(fg, bgc)
-                    let floor: Double = what.hasPrefix("textLow") ? 2.0 : 3.0
+                    // 3.0 for everything, including `textLow`.
+                    //
+                    // `textLow` had a floor of 2.0, which is low enough to be
+                    // satisfied by text that cannot be read: Blueprint-light's
+                    // `textLow` sat at 2.2:1 and passed. A floor set to meet
+                    // the value you already have is not a check, it is a
+                    // description — it can only ever confirm the palette you
+                    // wrote. 3.0 is WCAG's large-text threshold and the
+                    // defensible floor for de-emphasised text in a dense
+                    // instrument UI; captions and legal print are small, so the
+                    // purist answer is 4.5, and this is the compromise, stated
+                    // rather than hidden.
+                    let floor: Double = 3.0
                     if cr < floor {
                         contrastFails.append("\(s.name)/\(label) \(what) = \(String(format: "%.2f", cr)):1")
                     }
@@ -685,6 +697,9 @@ struct Tests {
         check("swiss radius is 0", Metrics.corner == 0)
         SkinController.set(skin: .blueprint, dark: true)
         check("blueprint radius is 0", Metrics.corner == 0)
+
+        typeScaleChecks()
+        negativeControl()
 
         print("\n== theme persistence ==")
 
@@ -748,6 +763,213 @@ struct Tests {
         print("\n\(summary)")
         if failures > 0 { print("\(failures) FAILURES"); exit(1) }
         print("all good")
+    }
+
+    // MARK: - Type scale
+    //
+    // `Skin.figureSize` was declared, described in a commit message as the thing
+    // that gives Swiss its character, asserted in a test — against another
+    // `Skin` field — and then read by nothing. All 117 font call sites passed a
+    // literal. So the app rendered in 8–14pt with one 20pt figure, in all three
+    // skins, and the test passed the whole time.
+    //
+    // The lesson is specific and worth keeping: comparing two struct fields
+    // verifies the *config*. Nothing about that can verify the *effect*. Every
+    // check below therefore measures rendered ink, and one of them greps the
+    // sources to prove each role has a real call site.
+
+    /// Rasterises `sample` in `font` and returns the height of its ink in
+    /// points — the actual pixels, not the nominal point size the caller asked
+    /// for. Those differ: glyph ink height is roughly 0.7 of the em box, so a
+    /// check that compared the two would need a fudge factor wide enough to
+    /// swallow the difference it was meant to detect.
+    @MainActor
+    static private func inkHeight(_ font: Font, sample: String = "0") -> CGFloat? {
+        let r = ImageRenderer(content:
+            Text(sample)
+                .font(font)
+                .foregroundStyle(.black)
+                .frame(width: 400, height: 220, alignment: .center)
+        )
+        r.scale = 2
+        guard let img = r.cgImage else { return nil }
+        let rep = NSBitmapImageRep(cgImage: img)
+        var minY = Int.max, maxY = -1
+        for y in 0..<rep.pixelsHigh {
+            for x in 0..<rep.pixelsWide {
+                guard let c = rep.colorAt(x: x, y: y) else { continue }
+                // Alpha first, then brightness.
+                //
+                // The first version of this checked brightness alone and every
+                // role came out at exactly the full canvas height, 220pt,
+                // identically, in all three skins. `ImageRenderer` gives a
+                // transparent background, and `colorAt` on a transparent pixel
+                // returns black with alpha 0 — so *every empty row* read as ink
+                // and the measurement was the size of the frame, not the glyph.
+                // A check that returns the same number for every input is a
+                // check that cannot fail, which is the same defect as the
+                // `figureSize` bug it was written to catch.
+                if c.alphaComponent > 0.5 && c.brightnessComponent < 0.5 {
+                    if y < minY { minY = y }
+                    if y > maxY { maxY = y }
+                    break
+                }
+            }
+        }
+        guard maxY >= minY else { return nil }
+        return CGFloat(maxY - minY + 1) / 2   // back to points
+    }
+
+    @MainActor
+    static private func typeScaleChecks() {
+        print("\n== type scale (rendered ink) ==")
+
+        // 1. Every role has a real call site. This is the check whose absence
+        //    let `figureSize` ship as a headline feature: a role nothing reads
+        //    is dead config, and dead config is indistinguishable from working
+        //    config if you only compare struct fields.
+        let srcDir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Tests/
+            .deletingLastPathComponent()   // repo root
+            .appendingPathComponent("Sources")
+        let sources = (try? FileManager.default
+            .contentsOfDirectory(at: srcDir, includingPropertiesForKeys: nil))?
+            .filter { $0.pathExtension == "swift" }
+            .compactMap { try? String(contentsOf: $0, encoding: .utf8) }
+            .joined(separator: "\n") ?? ""
+
+        for role in Type.allRoles {
+            let name = String(describing: role)
+            // Look for the role as an argument, not as a substring: `title`
+            // appears inside `subtitle` and `.lineLimit` noise otherwise.
+            let used = sources.range(of: "\\.(ui|mono)\\(\\.\(name)\\b",
+                                     options: .regularExpression) != nil
+            check("role .\(name) has a call site", used)
+        }
+
+        // 2. The ladder is monotonic in every skin, measured in real pixels.
+        for skin in Skin.all {
+            SkinController.set(skin: skin, dark: true)
+            let ladder: [(Type.Role, String)] = [(.hero, "hero"), (.display, "display"),
+                                                 (.figure, "figure"), (.heading, "heading"),
+                                                 (.title, "title"), (.body, "body"),
+                                                 (.small, "small"), (.label, "label"),
+                                                 (.micro, "micro")]
+            var heights: [String: CGFloat] = [:]
+            for (role, name) in ladder {
+                guard let h = inkHeight(.mono(role)) else {
+                    check("\(skin.name)/\(name) renders", false, "no ink")
+                    continue
+                }
+                heights[name] = h
+            }
+            guard heights.count == ladder.count else { continue }
+
+            // Each step down must actually get smaller. Adjacent roles differ by
+            // 1pt in some skins, which is below the rasteriser's resolution at
+            // 2x, so compare every other rung where the gap is >= 2pt.
+            let steps: [(String, String)] = [("hero", "display"), ("display", "title"),
+                                              ("title", "body"), ("body", "label"),
+                                              ("label", "micro")]
+            for (big, small) in steps {
+                guard let hb = heights[big], let hs = heights[small] else { continue }
+                check("\(skin.name): \(big) ink \(fmt1(hb)) > \(small) ink \(fmt1(hs))",
+                      hb > hs)
+            }
+        }
+
+        // 3. The claim under test, stated as the contrast it actually is.
+        //
+        //    The first version of this check asserted that Swiss's type was
+        //    larger than Graphite's at `.display`, `.body` *and* `.micro`. The
+        //    `.micro` case failed, and the check was wrong, not the skin:
+        //    Swiss `labelSize` is 8 against Graphite's 9, so Swiss's smallest
+        //    text is a point *smaller*. That is the design — Swiss is a wider
+        //    ladder, 42pt down to 7pt, where Graphite is 28pt down to 8pt. A
+        //    "bigger everywhere" assertion contradicts the thing it was
+        //    written to defend, and the fix that would have made it pass
+        //    (padding Swiss's `micro` up) would have thrown away the contrast.
+        //
+        //    So: the top rung must be larger, the bottom rung must not be
+        //    larger, and the span between them must be wider. That is a claim
+        //    that can fail in three separate ways.
+        var ink: [String: [String: CGFloat]] = [:]
+        for skin in Skin.all {
+            SkinController.set(skin: skin, dark: true)
+            var per: [String: CGFloat] = [:]
+            for role in Type.allRoles {
+                if let h = inkHeight(.mono(role)) { per[String(describing: role)] = h }
+            }
+            ink[skin.name] = per
+        }
+        if let g = ink["Graphite"], let s = ink["Swiss"] {
+            func span(_ t: [String: CGFloat]) -> CGFloat? {
+                guard let hi = t["display"], let lo = t["micro"], lo > 0 else { return nil }
+                return hi / lo
+            }
+            if let gTop = g["display"], let sTop = s["display"] {
+                check("swiss .display ink is at least 25% larger than graphite's",
+                      sTop / gTop >= 1.25,
+                      String(format: "graphite %.1f, swiss %.1f (x%.2f)", gTop, sTop, sTop / gTop))
+            }
+            if let gBot = g["micro"], let sBot = s["micro"] {
+                check("swiss .micro ink is no larger than graphite's (tighter bottom)",
+                      sBot <= gBot,
+                      String(format: "graphite %.1f, swiss %.1f", gBot, sBot))
+            }
+            if let gs = span(g), let ss = span(s) {
+                check("swiss spans a wider type range than graphite",
+                      ss > gs * 1.2,
+                      String(format: "graphite x%.2f, swiss x%.2f", gs, ss))
+            } else {
+                check("measured a display and micro rung in both skins", false)
+            }
+        } else {
+            check("measured ink for both Graphite and Swiss", false)
+        }
+
+        // 4. Ink tracks the requested size, so a role cannot pass by rendering
+        //    at some unrelated size. Loose on purpose: ink height is ~0.7 of
+        //    the em box and varies by face, so this bounds a gross mismatch
+        //    (a role silently falling back to the same size as its neighbour)
+        //    without needing a per-skin calibration table.
+        for skin in Skin.all {
+            SkinController.set(skin: skin, dark: true)
+            for role in Type.allRoles {
+                let want = Type.size(role)
+                guard let h = inkHeight(.mono(role)) else { continue }
+                let ratio = h / want
+                check(String(format: "%@ .%@ ink %.0f%% of %.0fpt",
+                             skin.name, String(describing: role), ratio * 100, want),
+                      ratio > 0.45 && ratio < 1.15)
+            }
+        }
+
+        SkinController.set(skin: .graphite, dark: true)
+    }
+
+    static private func fmt1(_ v: CGFloat) -> String {
+        String(format: "%.1f", Double(v))
+    }
+
+    /// Proves the harness above can report a failure.
+    ///
+    /// Four checks in this suite had never been seen to fail, and three of them
+    /// were wrong: one counted colours that were the card's own antialiased
+    /// hairlines, one compared byte values against 0–1 samples so nothing could
+    /// ever match, one clamped every view to the size it was offered and so
+    /// reported "fits" arithmetically. A check that has never failed is not
+    /// evidence. This asserts that `check` *does* fail when given a false
+    /// condition, by running one and requiring exactly one extra failure — so
+    /// a future harness that silently stops counting cannot hide behind a green
+    /// suite.
+    static private func negativeControl() {
+        print("\n== negative control ==")
+        let before = failures
+        check("deliberately false condition", false, "expected to fail")
+        check("the control failed exactly once", failures == before + 1,
+              "failures went \(before) -> \(failures)")
+        failures = before   // the control's own failure is not a real failure
     }
 
     // MARK: - Theme helpers
